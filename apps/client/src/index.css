@@ -613,8 +613,8 @@ html.theme-glass {
 /* Component Specific Styles */
 .file-item {
   transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease;
+    background-color 0.09s ease,
+    border-color 0.09s ease;
 }
 
 .file-item:hover {
@@ -628,7 +628,7 @@ html.theme-glass {
 }
 
 .sidebar-item {
-  transition: all 0.2s ease;
+  transition: all 0.09s ease;
 }
 
 .sidebar-item:hover {
@@ -641,7 +641,7 @@ html.theme-glass {
 }
 
 .tab-item {
-  transition: all 0.2s ease;
+  transition: all 0.09s ease;
 }
 
 .tab-item:hover {
@@ -654,7 +654,7 @@ html.theme-glass {
 }
 
 .extension-card {
-  transition: all 0.2s ease;
+  transition: all 0.09s ease;
 }
 
 .extension-card:hover {
@@ -662,7 +662,7 @@ html.theme-glass {
 }
 
 .chat-message {
-  animation: slideIn 0.3s ease-out;
+  animation: slideIn 0.09s ease-out;
 }
 
 @keyframes slideIn {
@@ -689,7 +689,7 @@ html.theme-glass {
 }
 
 .tour-tooltip-enter {
-  animation: tour-tooltip-enter 0.3s ease-out;
+  animation: tour-tooltip-enter 0.12s ease-out;
 }
 
 @keyframes tour-spotlight-pulse {

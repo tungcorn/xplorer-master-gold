@@ -147,14 +147,14 @@
 
 /* Transition utilities */
 .transition-all {
-  transition: all 0.2s ease-in-out;
+  transition: all 0.09s ease-in-out;
 }
 
 .transition-colors {
   transition:
-    color 0.2s ease-in-out,
-    background-color 0.2s ease-in-out,
-    border-color 0.2s ease-in-out;
+    color 0.09s ease-in-out,
+    background-color 0.09s ease-in-out,
+    border-color 0.09s ease-in-out;
 }
 
 /* Focus styling */
@@ -202,8 +202,8 @@ select:focus {
   opacity: 1;
   transform: scale(1);
   transition:
-    opacity 0.1s ease-out,
-    transform 0.1s ease-out;
+    opacity 0.06s ease-out,
+    transform 0.06s ease-out;
 }
 
 .context-menu-exit {
@@ -215,8 +215,8 @@ select:focus {
   opacity: 0;
   transform: scale(0.95);
   transition:
-    opacity 0.1s ease-in,
-    transform 0.1s ease-in;
+    opacity 0.06s ease-in,
+    transform 0.06s ease-in;
 }
 
 /* Loading spinner */
@@ -235,7 +235,6 @@ select:focus {
 
 /* File selection animation */
 .file-selected {
-  animation: selectPulse 0.3s ease-out;
 }
 
 @keyframes selectPulse {
