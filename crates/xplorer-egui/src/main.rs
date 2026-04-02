@@ -1,5 +1,6 @@
 mod state;
 mod theme;
+mod ui;
 mod worker;
 
 use eframe::egui;
@@ -40,20 +41,10 @@ impl eframe::App for XplorerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state.process_responses();
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let tab = self.state.active_tab();
-            if tab.loading {
-                ui.spinner();
-                ui.label(format!("Loading {}…", tab.path));
-            } else if let Some(err) = &tab.error {
-                ui.colored_label(egui::Color32::from_rgb(255, 85, 85), err);
-            } else {
-                ui.label(format!("{} items in {}", tab.entries.len(), tab.path));
-                for entry in &tab.entries {
-                    ui.label(&entry.name);
-                }
-            }
-        });
+        ui::sidebar::show(ctx, &mut self.state);
+        ui::top_bar::show(ctx, &mut self.state);
+        ui::status_bar::show(ctx, &self.state);
+        ui::file_list::show(ctx, &mut self.state);
     }
 }
 
