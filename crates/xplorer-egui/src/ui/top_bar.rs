@@ -4,14 +4,21 @@ use eframe::egui;
 
 use crate::state::AppState;
 use crate::theme;
+use crate::ui::tab_bar::{self, TabAction};
 
 pub fn show(ctx: &egui::Context, state: &mut AppState) {
     egui::TopBottomPanel::top("top_bar")
         .frame(egui::Frame::side_top_panel(&ctx.style()).fill(theme::CAPTION))
         .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(&state.active_tab().display_name).color(theme::TEXT));
-            });
+            let tab_action = tab_bar::show(ui, state);
+            match tab_action {
+                TabAction::Switch(i) => state.switch_tab(i),
+                TabAction::Close(i) => {
+                    state.close_tab(i);
+                }
+                TabAction::New => state.new_tab(),
+                TabAction::None => {}
+            }
             ui.separator();
             ui.horizontal(|ui| {
                 show_nav_buttons(ui, state);

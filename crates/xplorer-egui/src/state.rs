@@ -107,6 +107,19 @@ impl AppState {
         }
     }
 
+    pub fn new_tab(&mut self) {
+        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
+        let home_str = home.to_string_lossy().to_string();
+        let id = self.open_tab(home_str.clone());
+        self.request_load(id, home_str);
+    }
+
+    pub fn switch_tab(&mut self, index: usize) {
+        if index < self.tabs.len() {
+            self.active_tab = index;
+        }
+    }
+
     /// Drain pending responses from the worker and apply them to tabs.
     pub fn process_responses(&mut self) {
         while let Ok(resp) = self.resp_receiver.try_recv() {

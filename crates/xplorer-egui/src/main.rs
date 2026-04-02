@@ -41,6 +41,14 @@ impl eframe::App for XplorerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state.process_responses();
 
+        if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl) {
+            self.state.new_tab();
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::W) && i.modifiers.ctrl) {
+            let idx = self.state.active_tab;
+            self.state.close_tab(idx);
+        }
+
         ui::sidebar::show(ctx, &mut self.state);
         ui::top_bar::show(ctx, &mut self.state);
         ui::status_bar::show(ctx, &self.state);
