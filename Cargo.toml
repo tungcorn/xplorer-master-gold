@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/xplorer-core", "crates/xplorer-egui"]
+resolver = "2"

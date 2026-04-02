@@ -1,0 +1,26 @@
+[package]
+name = "xplorer-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+rayon = "1.8"
+walkdir = "2.5"
+trash = "5.1"
+dirs = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+glob = "0.3"
+notify = "7"
+notify-debouncer-full = "0.4"
+thiserror = "2"
+open = "5"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+
+[dev-dependencies]
+tempfile = "3.0"
+tokio-test = "0.4"
