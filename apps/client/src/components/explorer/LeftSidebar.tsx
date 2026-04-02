@@ -1,5 +1,6 @@
-import React, { useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import { FileEntry } from '@/lib/tauri-api';
+import { Search } from 'lucide-react';
 import SearchResultsPanel, {
   type SearchResultsPanelHandle,
 } from '@/components/explorer/SearchResultsPanel';
@@ -42,6 +43,7 @@ const LeftSidebar = forwardRef<LeftSidebarHandle, LeftSidebarProps>(
     ref,
   ) => {
     const searchPanelRef = useRef<SearchResultsPanelHandle>(null);
+    const [filterText, setFilterText] = useState('');
 
     useImperativeHandle(ref, () => ({
       focusSearch: () => {
@@ -62,7 +64,7 @@ const LeftSidebar = forwardRef<LeftSidebarHandle, LeftSidebarProps>(
           role="navigation"
           aria-label="File explorer sidebar"
           className="bg-xp-surface border-xp-border flex flex-shrink-0 flex-col border-r"
-          style={{ width: width ?? 200, minHeight: 0, overflow: 'hidden' }}
+          style={{ width: width ?? 232, minHeight: 0, overflow: 'hidden' }}
         >
           <SearchResultsPanel
             ref={searchPanelRef}
@@ -81,18 +83,38 @@ const LeftSidebar = forwardRef<LeftSidebarHandle, LeftSidebarProps>(
         role="navigation"
         aria-label="File explorer sidebar"
         className="bg-xp-surface border-xp-border flex flex-shrink-0 flex-col border-r"
-        style={{ width: width ?? 200, minHeight: 0, overflow: 'hidden' }}
+        style={{ width: width ?? 232, minHeight: 0, overflow: 'hidden' }}
       >
-        <SidebarQuickAccess currentPath={currentPath} navigateToPath={navigateToPath} />
-        <div className="bg-xp-border mx-3 h-px" />
+        <div className="flex-shrink-0 px-2 pb-1 pt-2">
+          <div
+            className="flex items-center rounded-lg px-2"
+            style={{ height: 32, background: '#25282b' }}
+          >
+            <Search size={14} className="text-xp-text-muted mr-2 flex-shrink-0" />
+            <input
+              type="text"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              className="text-xp-text placeholder:text-xp-text-muted w-full bg-transparent text-[13px] outline-none"
+              placeholder="Filter..."
+            />
+          </div>
+        </div>
+        <SidebarQuickAccess
+          currentPath={currentPath}
+          navigateToPath={navigateToPath}
+          filterText={filterText}
+        />
+        <div style={{ height: 12 }} />
         <SidebarDrives navigateToPath={navigateToPath} />
-        <div className="bg-xp-border mx-3 h-px" />
+        <div style={{ height: 12 }} />
         <SidebarBookmarks
           currentPath={currentPath}
           navigateToPath={navigateToPath}
           handleFileRightClick={handleFileRightClick}
+          filterText={filterText}
         />
-        <div className="bg-xp-border mx-3 h-px" />
+        <div style={{ height: 12 }} />
         <SidebarFileTree
           currentPath={currentPath}
           navigateToPath={navigateToPath}

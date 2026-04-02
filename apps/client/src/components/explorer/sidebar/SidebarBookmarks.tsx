@@ -9,9 +9,14 @@ interface SidebarBookmarksProps {
   currentPath: string;
   navigateToPath: (path: string) => void;
   handleFileRightClick?: (file: FileEntry, event: React.MouseEvent) => void;
+  filterText?: string;
 }
 
-const SidebarBookmarks = ({ navigateToPath, handleFileRightClick }: SidebarBookmarksProps) => {
+const SidebarBookmarks = ({
+  navigateToPath,
+  handleFileRightClick,
+  filterText = '',
+}: SidebarBookmarksProps) => {
   const { t } = useTranslation();
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
 
@@ -46,66 +51,71 @@ const SidebarBookmarks = ({ navigateToPath, handleFileRightClick }: SidebarBookm
       {bookmarks.length === 0 ? (
         <p className="text-xp-text-secondary py-1 text-xs">{t('sidebar.noBookmarks')}</p>
       ) : (
-        bookmarks.map((bookmark) => {
-          const bookmarkColor = bookmark.is_dir ? getFolderColorHex(bookmark.path) : null;
-          return (
-            <div
-              key={bookmark.path}
-              className="group flex w-full cursor-pointer items-center rounded px-2 py-1 text-xs transition-colors hover:bg-white/[0.03]"
-              onClick={() => navigateToPath(bookmark.path)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (handleFileRightClick) {
-                  const syntheticFile: FileEntry = {
-                    name: bookmark.name,
-                    path: bookmark.path,
-                    size: 0,
-                    modified: 0,
-                    is_dir: bookmark.is_dir,
-                    file_type: bookmark.is_dir ? 'folder' : bookmark.name.split('.').pop() || '',
-                    is_readonly: false,
-                  };
-                  handleFileRightClick(syntheticFile, e);
-                }
-              }}
-              title={bookmark.path}
-            >
-              {bookmarkColor && (
-                <span
-                  style={{
-                    display: 'inline-block',
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    backgroundColor: bookmarkColor,
-                    flexShrink: 0,
-                    marginRight: 4,
-                  }}
-                  aria-hidden="true"
-                />
-              )}
-              {bookmark.is_dir ? (
-                <FolderClosed
-                  size={14}
-                  className="text-xp-blue mr-2 flex-shrink-0"
-                  style={bookmarkColor ? { color: bookmarkColor } : undefined}
-                />
-              ) : (
-                <File size={14} className="text-xp-text-secondary mr-2 flex-shrink-0" />
-              )}
-              <span className="flex-1 truncate">{bookmark.name}</span>
-              <button
-                onClick={(e) => handleRemoveBookmark(bookmark.path, e)}
-                className="text-xp-text-muted hover:text-xp-red ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                title="Remove bookmark"
-                aria-label={`Remove bookmark for ${bookmark.name}`}
+        bookmarks
+          .filter(
+            (bookmark) =>
+              !filterText || bookmark.name.toLowerCase().includes(filterText.toLowerCase()),
+          )
+          .map((bookmark) => {
+            const bookmarkColor = bookmark.is_dir ? getFolderColorHex(bookmark.path) : null;
+            return (
+              <div
+                key={bookmark.path}
+                className="group flex w-full cursor-pointer items-center rounded px-2 py-1 text-xs transition-colors hover:bg-white/[0.03]"
+                onClick={() => navigateToPath(bookmark.path)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (handleFileRightClick) {
+                    const syntheticFile: FileEntry = {
+                      name: bookmark.name,
+                      path: bookmark.path,
+                      size: 0,
+                      modified: 0,
+                      is_dir: bookmark.is_dir,
+                      file_type: bookmark.is_dir ? 'folder' : bookmark.name.split('.').pop() || '',
+                      is_readonly: false,
+                    };
+                    handleFileRightClick(syntheticFile, e);
+                  }
+                }}
+                title={bookmark.path}
               >
-                <span aria-hidden="true">&times;</span>
-              </button>
-            </div>
-          );
-        })
+                {bookmarkColor && (
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: bookmarkColor,
+                      flexShrink: 0,
+                      marginRight: 4,
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+                {bookmark.is_dir ? (
+                  <FolderClosed
+                    size={14}
+                    className="text-xp-blue mr-2 flex-shrink-0"
+                    style={bookmarkColor ? { color: bookmarkColor } : undefined}
+                  />
+                ) : (
+                  <File size={14} className="text-xp-text-secondary mr-2 flex-shrink-0" />
+                )}
+                <span className="flex-1 truncate">{bookmark.name}</span>
+                <button
+                  onClick={(e) => handleRemoveBookmark(bookmark.path, e)}
+                  className="text-xp-text-muted hover:text-xp-red ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                  title="Remove bookmark"
+                  aria-label={`Remove bookmark for ${bookmark.name}`}
+                >
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+            );
+          })
       )}
     </div>
   );

@@ -17,9 +17,14 @@ interface UserDirectories {
 interface SidebarQuickAccessProps {
   currentPath: string;
   navigateToPath: (path: string) => void;
+  filterText?: string;
 }
 
-const SidebarQuickAccess = ({ currentPath, navigateToPath }: SidebarQuickAccessProps) => {
+const SidebarQuickAccess = ({
+  currentPath,
+  navigateToPath,
+  filterText = '',
+}: SidebarQuickAccessProps) => {
   const { t } = useTranslation();
   const [userDirectories, setUserDirectories] = useState<UserDirectories | null>(null);
   const [iCloudPath, setICloudPath] = useState<string | null>(null);
@@ -87,27 +92,32 @@ const SidebarQuickAccess = ({ currentPath, navigateToPath }: SidebarQuickAccessP
               labelKey: 'sidebar.pictures' as const,
             },
           ] as const
-        ).map(({ path, Icon, color, labelKey }) => {
-          const label = t(labelKey);
-          const isActive = currentPath === path;
-          return (
-            <button
-              key={labelKey}
-              onClick={() => navigateToPath(path)}
-              className={`flex w-full items-center rounded px-2 py-1 text-xs transition-colors ${
-                isActive ? 'text-xp-text bg-white/[0.04]' : 'text-xp-text hover:bg-white/[0.03]'
-              }`}
-              aria-label={t('sidebar.navigateTo', { label })}
-            >
-              <Icon
-                size={15}
-                className={`mr-2.5 flex-shrink-0 ${isActive ? 'text-xp-blue' : color}`}
-                aria-hidden="true"
-              />
-              {label}
-            </button>
-          );
-        })}
+        )
+          .filter(
+            ({ labelKey }) =>
+              !filterText || t(labelKey).toLowerCase().includes(filterText.toLowerCase()),
+          )
+          .map(({ path, Icon, color, labelKey }) => {
+            const label = t(labelKey);
+            const isActive = currentPath === path;
+            return (
+              <button
+                key={labelKey}
+                onClick={() => navigateToPath(path)}
+                className={`flex w-full items-center rounded px-2 py-1 text-xs transition-colors ${
+                  isActive ? 'text-xp-text bg-white/[0.04]' : 'text-xp-text hover:bg-white/[0.03]'
+                }`}
+                aria-label={t('sidebar.navigateTo', { label })}
+              >
+                <Icon
+                  size={15}
+                  className={`mr-2.5 flex-shrink-0 ${isActive ? 'text-xp-blue' : color}`}
+                  aria-hidden="true"
+                />
+                {label}
+              </button>
+            );
+          })}
       {iCloudPath &&
         (() => {
           const isActive = currentPath === iCloudPath;

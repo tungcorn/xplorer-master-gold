@@ -119,7 +119,7 @@ export const useLayoutState = (): LayoutState => {
 
   // Panel sizes
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() =>
-    loadUiState('leftSidebarWidth', 200),
+    loadUiState('leftSidebarWidth', 232),
   );
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() =>
     loadUiState('rightSidebarWidth', 320),
