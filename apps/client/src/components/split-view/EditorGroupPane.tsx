@@ -9,7 +9,6 @@ import type { EditorGroup } from '@/types/split-view';
 import { type FileCollection, applyCollectionToFiles } from '@/lib/collections';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import PaneTabBar from './PaneTabBar';
-import NavigationBar from '@/components/explorer/NavigationBar';
 import {
   type PaneSyncMode,
   type PaneSyncNavigateDetail,
@@ -603,7 +602,7 @@ export default function EditorGroupPane({
     !currentPath.startsWith('collection://');
 
   // Only show PaneTabBar when there are multiple tabs or multiple panes
-  const showTabBar = group.tabs.length > 1 || totalGroups > 1;
+  const showTabBar = totalGroups > 1;
 
   return (
     <div
@@ -648,15 +647,6 @@ export default function EditorGroupPane({
           onTogglePaneSync={onTogglePaneSync}
           onSwitchPaneSyncMode={onSwitchPaneSyncMode}
           hasMultiplePanes={totalGroups > 1}
-        />
-      )}
-
-      {/* Navigation / Address Bar — shown for filesystem paths */}
-      {isDroppablePath && (
-        <NavigationBar
-          currentPath={currentPath}
-          navigateToPath={sharedActions.navigateToPath}
-          refetch={refetch}
         />
       )}
 
