@@ -117,25 +117,25 @@
 
 /* Scrollbar styling for Tokyo Night theme */
 .xp-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 11px;
+  height: 11px;
 }
 
 .xp-scrollbar::-webkit-scrollbar-track {
-  background: var(--xp-surface);
+  background: transparent;
 }
 
 .xp-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--xp-border);
-  border-radius: 4px;
+  background: #5c6166;
+  border-radius: 999px;
 }
 
 .xp-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--xp-border-light);
+  background: #767c81;
 }
 
 .xp-scrollbar::-webkit-scrollbar-corner {
-  background: var(--xp-surface);
+  background: transparent;
 }
 
 /* Apply scrollbar styling to scrollable areas */

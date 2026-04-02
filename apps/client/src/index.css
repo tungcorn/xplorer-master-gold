@@ -342,11 +342,11 @@ html.theme-glass {
   background: transparent;
 }
 .theme-glass ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
+  background: #5c6166;
+  border-radius: 999px;
 }
 .theme-glass ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: #767c81;
 }
 
 /* ── Borders ──────────────────────────────────────────────────── */
@@ -548,20 +548,20 @@ html.theme-glass {
 
   /* Scrollbar Styling */
   ::-webkit-scrollbar {
-    width: 8px;
+    width: 11px;
   }
 
   ::-webkit-scrollbar-track {
-    background: var(--xp-surface);
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: var(--xp-border);
-    border-radius: 4px;
+    background: #5c6166;
+    border-radius: 999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--xp-blue);
+    background: #767c81;
   }
 
   /* 3D View Styles */
