@@ -414,7 +414,7 @@ const MainLayout = (props: MainLayoutProps) => {
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            background: 'var(--xp-bg-gradient, var(--xp-bg, #1e1e2e))',
+            background: 'var(--xp-bg, #1d1f21)',
           }}
         >
           {/* Top Bar */}
