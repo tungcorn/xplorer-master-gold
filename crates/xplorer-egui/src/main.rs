@@ -1,4 +1,5 @@
 mod state;
+mod theme;
 mod worker;
 
 use eframe::egui;
@@ -11,6 +12,9 @@ struct XplorerApp {
 
 impl XplorerApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        theme::apply_theme(&cc.egui_ctx);
+        theme::setup_fonts(&cc.egui_ctx);
+
         let (req_tx, req_rx) = mpsc::channel();
         let (resp_tx, resp_rx) = mpsc::channel();
 
