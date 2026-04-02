@@ -6,6 +6,7 @@ mod worker;
 use eframe::egui;
 use state::AppState;
 use std::sync::mpsc;
+use ui::sidebar::SidebarAction;
 
 struct XplorerApp {
     state: AppState,
@@ -48,8 +49,19 @@ impl eframe::App for XplorerApp {
             let idx = self.state.active_tab;
             self.state.close_tab(idx);
         }
+        if ctx.input(|i| i.key_pressed(egui::Key::B) && i.modifiers.ctrl) {
+            self.state.show_sidebar = !self.state.show_sidebar;
+        }
 
-        ui::sidebar::show(ctx, &mut self.state);
+        let sidebar_action = ui::sidebar::show(ctx, &mut self.state);
+        match sidebar_action {
+            SidebarAction::Navigate(path) => self.state.navigate_to(&path),
+            SidebarAction::RemoveBookmark(path) => {
+                let _ = xplorer_core::bookmarks::remove_bookmark(&path);
+                self.state.bookmarks = xplorer_core::bookmarks::get_bookmarks().unwrap_or_default();
+            }
+            SidebarAction::None => {}
+        }
         ui::top_bar::show(ctx, &mut self.state);
         ui::status_bar::show(ctx, &self.state);
         ui::file_list::show(ctx, &mut self.state);
