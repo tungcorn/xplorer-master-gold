@@ -314,7 +314,7 @@ const StatusBar = ({ files, selectedFiles, currentPath, activeTab, vimState }: S
   }, [isEditorMode]);
 
   // Truncate path for display
-  const displayPath = React.useMemo(() => {
+  const _displayPath = React.useMemo(() => {
     if (currentPath.startsWith('xplorer://')) return currentPath.replace('xplorer://', '');
     const maxLen = 60;
     if (currentPath.length <= maxLen) return currentPath;
@@ -361,12 +361,14 @@ const StatusBar = ({ files, selectedFiles, currentPath, activeTab, vimState }: S
     <div
       role="status"
       aria-live="polite"
-      className="bg-xp-surface border-xp-border text-xp-text-secondary flex flex-shrink-0 select-none items-center justify-between border-t px-2 text-xs"
-      style={{ minHeight: '24px', height: '24px' }}
+      className="text-xp-text-secondary pointer-events-none absolute bottom-2 left-0 right-0 z-10 flex select-none items-center justify-between px-3 text-xs"
+      style={{ height: 35 }}
     >
-      {/* Left section */}
-      <div className="flex items-center gap-3" aria-label={t('statusBar.fileCount')}>
-        {/* Vim Mode Indicator */}
+      <div
+        className="pointer-events-auto flex items-center gap-2 rounded-xl border px-3 py-1.5"
+        style={{ background: '#202325', borderColor: 'rgba(255,255,255,0.08)' }}
+        aria-label={t('statusBar.fileCount')}
+      >
         {vimState && vimState.enabled && (
           <>
             <VimModeIndicator
@@ -380,21 +382,20 @@ const StatusBar = ({ files, selectedFiles, currentPath, activeTab, vimState }: S
 
         <span>{t('statusBar.items', { count: files.length })}</span>
         {selectedFiles.size > 0 && (
-          <span>
-            {t('statusBar.selected', { count: selectedFiles.size })}
-            {selectionSize > 0 && ` (${formatFileSize(selectionSize)})`}
-          </span>
+          <>
+            <Separator />
+            <span>
+              {t('statusBar.selected', { count: selectedFiles.size })}
+              {selectionSize > 0 && ` (${formatFileSize(selectionSize)})`}
+            </span>
+          </>
         )}
       </div>
 
-      {/* Center section */}
-      <div className="flex-1 truncate px-4 text-center opacity-80" title={currentPath}>
-        {displayPath}
-      </div>
-
-      {/* Right section */}
-      <div className="flex items-center gap-2">
-        {/* Cursor position (editor mode only) */}
+      <div
+        className="pointer-events-auto flex items-center gap-2 rounded-xl border px-3 py-1.5"
+        style={{ background: '#202325', borderColor: 'rgba(255,255,255,0.08)' }}
+      >
         {isEditorMode && cursorPos && (
           <>
             <Badge
@@ -407,7 +408,6 @@ const StatusBar = ({ files, selectedFiles, currentPath, activeTab, vimState }: S
           </>
         )}
 
-        {/* Encoding */}
         {encoding && encoding !== 'Binary' && (
           <>
             <Badge
@@ -420,7 +420,6 @@ const StatusBar = ({ files, selectedFiles, currentPath, activeTab, vimState }: S
           </>
         )}
 
-        {/* Line endings */}
         {lineEnding && (
           <>
             <Badge
@@ -433,7 +432,6 @@ const StatusBar = ({ files, selectedFiles, currentPath, activeTab, vimState }: S
           </>
         )}
 
-        {/* Git info */}
         {gitInfo && (
           <>
             <button
@@ -463,7 +461,7 @@ const StatusBar = ({ files, selectedFiles, currentPath, activeTab, vimState }: S
                     lineHeight: '14px',
                     fontWeight: 600,
                     background: 'var(--xp-orange, #e8a854)',
-                    color: 'var(--xp-bg, #0a0a1a)',
+                    color: 'var(--xp-bg, #1d1f21)',
                   }}
                   title={`${gitInfo.modifiedCount}M ${gitInfo.stagedCount}S ${gitInfo.untrackedCount}U`}
                 >
@@ -475,7 +473,6 @@ const StatusBar = ({ files, selectedFiles, currentPath, activeTab, vimState }: S
           </>
         )}
 
-        {/* Free disk space */}
         {freeSpace && (
           <span
             title={t('statusBar.freeSpace')}
