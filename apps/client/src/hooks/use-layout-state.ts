@@ -140,7 +140,7 @@ export const useLayoutState = (): LayoutState => {
   }, []);
 
   // View mode
-  const [viewMode, setViewMode] = useState<string>(() => loadUiState('viewMode', 'medium'));
+  const [viewMode, setViewMode] = useState<string>(() => loadUiState('viewMode', 'details'));
 
   // Sorting
   const [sortBy, setSortBy] = useState<SortField>(() => loadUiState<SortField>('sortBy', 'name'));

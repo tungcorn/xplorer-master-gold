@@ -8,7 +8,7 @@ interface DetailsViewProps extends ViewComponentProps {
   fileGroups?: FileGroup[] | null;
 }
 
-const DETAILS_ROW_HEIGHT = 40;
+const DETAILS_ROW_HEIGHT = 32;
 const GROUP_HEADER_HEIGHT = 36;
 const DETAILS_VIRTUALIZATION_THRESHOLD = 200;
 
@@ -84,11 +84,9 @@ const FileRow = React.memo(
         tabIndex={0}
         data-file-path={file.path}
         data-drop-target={file.is_dir ? file.path : undefined}
-        className={`hover:bg-xp-surface-light grid cursor-pointer grid-cols-12 items-center gap-3 px-3 py-2.5 transition-colors ${
-          selectedFiles.has(file.path)
-            ? 'bg-xp-purple/20 border-xp-purple/40 border'
-            : 'text-xp-text border border-transparent'
-        } `}
+        className={`border-xp-border grid cursor-pointer grid-cols-12 items-center gap-2 border-b px-2 py-1 transition-colors hover:bg-white/[0.03] ${
+          selectedFiles.has(file.path) ? 'bg-xp-blue text-white' : 'text-xp-text'
+        }`}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
@@ -132,7 +130,7 @@ const FileRow = React.memo(
 
 const GroupHeader = React.memo(({ name, count }: { name: string; count: number }) => (
   <div
-    className="bg-xp-surface-secondary border-xp-border flex items-center border-b px-3 py-2"
+    className="bg-xp-surface-secondary border-xp-border flex items-center border-b px-2 py-1.5"
     style={{ height: GROUP_HEADER_HEIGHT }}
   >
     <span className="text-xp-text-secondary text-xs font-semibold uppercase tracking-wide">
@@ -235,7 +233,7 @@ const DetailsView = (props: DetailsViewProps) => {
 
   const header = (
     <div className="bg-xp-surface border-xp-border sticky top-0 z-20 border-b" role="row">
-      <div className="text-xp-text-muted grid grid-cols-12 items-center gap-3 px-3 py-3 text-xs font-medium">
+      <div className="text-xp-text-muted grid grid-cols-12 items-center gap-2 px-2 py-2 text-xs font-medium">
         <div className="col-span-1" role="columnheader" aria-label="Icon" />
         <div className="col-span-5" role="columnheader">
           Name
@@ -277,7 +275,7 @@ const DetailsView = (props: DetailsViewProps) => {
   if (!needsVirtualization) {
     return (
       <div
-        className="text-sm"
+        className="text-[13px]"
         role="table"
         aria-label="File list"
         onContextMenu={handleBackgroundRightClick || undefined}
@@ -297,7 +295,7 @@ const DetailsView = (props: DetailsViewProps) => {
   return (
     <div
       ref={scrollRef}
-      className="h-full overflow-auto text-sm"
+      className="h-full overflow-auto text-[13px]"
       role="table"
       aria-label="File list"
       onContextMenu={handleBackgroundRightClick || undefined}
