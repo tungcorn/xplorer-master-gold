@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::path::PathBuf;
 use xplorer_core::types::{Bookmark, DriveInfo, FileEntry};
 
@@ -87,6 +88,7 @@ impl AppState {
                                 tab.entries = e;
                                 tab.error = None;
                                 tab.selected_indices.clear();
+                                tab.sort_entries();
                             }
                             Err(e) => {
                                 tab.error = Some(e);
@@ -112,6 +114,7 @@ pub struct Tab {
     pub sort_ascending: bool,
     pub filter_text: String,
     pub selected_indices: Vec<usize>,
+    pub last_clicked_index: Option<usize>,
 }
 
 impl Tab {
@@ -129,6 +132,7 @@ impl Tab {
             sort_ascending: true,
             filter_text: String::new(),
             selected_indices: Vec::new(),
+            last_clicked_index: None,
         }
     }
 
@@ -172,6 +176,39 @@ impl Tab {
         } else {
             None
         }
+    }
+
+    pub fn toggle_sort(&mut self, column: SortColumn) {
+        if self.sort_column == column {
+            self.sort_ascending = !self.sort_ascending;
+        } else {
+            self.sort_column = column;
+            self.sort_ascending = true;
+        }
+        self.sort_entries();
+    }
+
+    pub fn sort_entries(&mut self) {
+        let col = self.sort_column;
+        let asc = self.sort_ascending;
+        self.entries.sort_by(|a, b| {
+            let dir_cmp = b.is_dir.cmp(&a.is_dir);
+            if dir_cmp != Ordering::Equal {
+                return dir_cmp;
+            }
+            let cmp = match col {
+                SortColumn::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                SortColumn::Size => a.size.cmp(&b.size),
+                SortColumn::Type => a.file_type.cmp(&b.file_type),
+                SortColumn::Modified => a.modified.cmp(&b.modified),
+            };
+            if asc {
+                cmp
+            } else {
+                cmp.reverse()
+            }
+        });
+        self.selected_indices.clear();
     }
 }
 

@@ -2,7 +2,7 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use xplorer_core::types::FileEntry;
 
-use crate::state::AppState;
+use crate::state::{AppState, SortColumn};
 use crate::theme;
 
 pub fn show(ctx: &egui::Context, state: &mut AppState) {
@@ -40,6 +40,13 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
                 return;
             }
 
+            let sort_col = tab.sort_column;
+            let sort_asc = tab.sort_ascending;
+            let selected = tab.selected_indices.clone();
+
+            let mut sort_clicked: Option<SortColumn> = None;
+            let mut selection_action: Option<SelectionAction> = None;
+
             let row_height = 28.0;
             let table = TableBuilder::new(ui)
                 .striped(true)
@@ -53,26 +60,68 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
             table
                 .header(row_height, |mut header| {
                     header.col(|ui| {
-                        ui.strong("Name");
+                        if ui
+                            .selectable_label(
+                                false,
+                                sort_header("Name", SortColumn::Name, sort_col, sort_asc),
+                            )
+                            .clicked()
+                        {
+                            sort_clicked = Some(SortColumn::Name);
+                        }
                     });
                     header.col(|ui| {
-                        ui.strong("Size");
+                        if ui
+                            .selectable_label(
+                                false,
+                                sort_header("Size", SortColumn::Size, sort_col, sort_asc),
+                            )
+                            .clicked()
+                        {
+                            sort_clicked = Some(SortColumn::Size);
+                        }
                     });
                     header.col(|ui| {
-                        ui.strong("Type");
+                        if ui
+                            .selectable_label(
+                                false,
+                                sort_header("Type", SortColumn::Type, sort_col, sort_asc),
+                            )
+                            .clicked()
+                        {
+                            sort_clicked = Some(SortColumn::Type);
+                        }
                     });
                     header.col(|ui| {
-                        ui.strong("Modified");
+                        if ui
+                            .selectable_label(
+                                false,
+                                sort_header("Modified", SortColumn::Modified, sort_col, sort_asc),
+                            )
+                            .clicked()
+                        {
+                            sort_clicked = Some(SortColumn::Modified);
+                        }
                     });
                 })
                 .body(|body| {
                     body.rows(row_height, filtered.len(), |mut row| {
                         let idx = row.index();
-                        let (_original_idx, entry) = &filtered[idx];
+                        let (original_idx, entry) = &filtered[idx];
+                        let is_selected = selected.contains(original_idx);
 
                         row.col(|ui| {
                             let prefix = if entry.is_dir { "📁" } else { "  " };
-                            ui.label(format!("{} {}", prefix, entry.name));
+                            let label = format!("{} {}", prefix, entry.name);
+                            let response = ui.selectable_label(is_selected, label);
+                            if response.clicked() {
+                                let modifiers = ui.input(|i| i.modifiers);
+                                selection_action = Some(SelectionAction {
+                                    index: *original_idx,
+                                    ctrl: modifiers.ctrl || modifiers.mac_cmd,
+                                    shift: modifiers.shift,
+                                });
+                            }
                         });
                         row.col(|ui| {
                             if entry.is_dir {
@@ -89,7 +138,52 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
                         });
                     });
                 });
+
+            if let Some(col) = sort_clicked {
+                state.active_tab_mut().toggle_sort(col);
+            }
+
+            if let Some(action) = selection_action {
+                apply_selection(state, action);
+            }
         });
+}
+
+struct SelectionAction {
+    index: usize,
+    ctrl: bool,
+    shift: bool,
+}
+
+fn apply_selection(state: &mut AppState, action: SelectionAction) {
+    let tab = state.active_tab_mut();
+    if action.shift {
+        if let Some(anchor) = tab.last_clicked_index {
+            let start = anchor.min(action.index);
+            let end = anchor.max(action.index);
+            tab.selected_indices = (start..=end).collect();
+        } else {
+            tab.selected_indices = vec![action.index];
+        }
+    } else if action.ctrl {
+        if let Some(pos) = tab.selected_indices.iter().position(|&i| i == action.index) {
+            tab.selected_indices.remove(pos);
+        } else {
+            tab.selected_indices.push(action.index);
+        }
+        tab.last_clicked_index = Some(action.index);
+    } else {
+        tab.selected_indices = vec![action.index];
+        tab.last_clicked_index = Some(action.index);
+    }
+}
+
+fn sort_header(name: &str, col: SortColumn, current: SortColumn, ascending: bool) -> String {
+    if col == current {
+        format!("{} {}", name, if ascending { "▲" } else { "▼" })
+    } else {
+        name.to_string()
+    }
 }
 
 fn format_size(bytes: u64) -> String {
