@@ -9,7 +9,7 @@ edition = "2021"
 default-run = "xplorer"
 
 [build-dependencies]
-tauri-build = { version = "2.5.5", features = [] }
+tauri-build = { version = "2.5.6", features = [] }
 
 [dependencies]
 tauri = { version = "2.10.2", features = ["protocol-asset"] }
