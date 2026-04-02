@@ -11,6 +11,11 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 :root {
@@ -174,7 +179,7 @@ html.theme-light {
    ═══════════════════════════════════════════════════════════════════ */
 
 html.font-small {
-  font-size: 12px;
+  font-size: 13px;
 }
 html.font-medium {
   font-size: 14px;
