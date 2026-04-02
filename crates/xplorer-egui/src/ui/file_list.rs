@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use xplorer_core::types::FileEntry;
@@ -46,6 +48,7 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
 
             let mut sort_clicked: Option<SortColumn> = None;
             let mut selection_action: Option<SelectionAction> = None;
+            let mut double_click_action: Option<DoubleClickAction> = None;
 
             let row_height = 28.0;
             let table = TableBuilder::new(ui)
@@ -114,7 +117,15 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
                             let prefix = if entry.is_dir { "📁" } else { "  " };
                             let label = format!("{} {}", prefix, entry.name);
                             let response = ui.selectable_label(is_selected, label);
-                            if response.clicked() {
+                            if response.double_clicked() {
+                                if entry.is_dir {
+                                    double_click_action =
+                                        Some(DoubleClickAction::NavigateDir(entry.path.clone()));
+                                } else {
+                                    double_click_action =
+                                        Some(DoubleClickAction::OpenFile(entry.path.clone()));
+                                }
+                            } else if response.clicked() {
                                 let modifiers = ui.input(|i| i.modifiers);
                                 selection_action = Some(SelectionAction {
                                     index: *original_idx,
@@ -146,6 +157,16 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
             if let Some(action) = selection_action {
                 apply_selection(state, action);
             }
+
+            match double_click_action {
+                Some(DoubleClickAction::NavigateDir(path)) => {
+                    state.navigate_to(&path);
+                }
+                Some(DoubleClickAction::OpenFile(path)) => {
+                    let _ = xplorer_core::system::open_file(Path::new(&path));
+                }
+                None => {}
+            }
         });
 }
 
@@ -153,6 +174,11 @@ struct SelectionAction {
     index: usize,
     ctrl: bool,
     shift: bool,
+}
+
+enum DoubleClickAction {
+    NavigateDir(String),
+    OpenFile(String),
 }
 
 fn apply_selection(state: &mut AppState, action: SelectionAction) {

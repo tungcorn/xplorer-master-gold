@@ -11,6 +11,8 @@ pub struct AppState {
     pub show_sidebar: bool,
     pub drives: Vec<DriveInfo>,
     pub bookmarks: Vec<Bookmark>,
+    pub editing_address_bar: bool,
+    pub address_bar_text: String,
     next_tab_id: usize,
 }
 
@@ -30,6 +32,8 @@ impl AppState {
             show_sidebar: true,
             drives: Vec::new(),
             bookmarks: Vec::new(),
+            editing_address_bar: false,
+            address_bar_text: String::new(),
             next_tab_id: 1,
         }
     }
@@ -68,6 +72,39 @@ impl AppState {
         let _ = self
             .req_sender
             .send(DirRequest::LoadDirectory { tab_id, path });
+    }
+
+    pub fn navigate_to(&mut self, path: &str) {
+        let tab = self.active_tab_mut();
+        tab.navigate(path.to_string());
+        let tab_id = tab.id;
+        self.request_load(tab_id, path.to_string());
+    }
+
+    pub fn go_back_nav(&mut self) {
+        let tab = self.active_tab_mut();
+        if let Some(path) = tab.go_back() {
+            let tab_id = tab.id;
+            self.request_load(tab_id, path);
+        }
+    }
+
+    pub fn go_forward_nav(&mut self) {
+        let tab = self.active_tab_mut();
+        if let Some(path) = tab.go_forward() {
+            let tab_id = tab.id;
+            self.request_load(tab_id, path);
+        }
+    }
+
+    pub fn go_up(&mut self) {
+        let current = self.active_tab().path.clone();
+        if let Some(parent) = std::path::Path::new(&current).parent() {
+            let parent_str = parent.to_string_lossy().to_string();
+            if parent_str != current {
+                self.navigate_to(&parent_str);
+            }
+        }
     }
 
     /// Drain pending responses from the worker and apply them to tabs.
@@ -137,7 +174,6 @@ impl Tab {
     }
 
     pub fn navigate(&mut self, path: String) {
-        // Truncate forward history if we navigated back earlier.
         self.history.truncate(self.history_index + 1);
         self.history.push(path.clone());
         self.history_index = self.history.len() - 1;
@@ -146,6 +182,7 @@ impl Tab {
         self.loading = true;
         self.error = None;
         self.selected_indices.clear();
+        self.filter_text.clear();
     }
 
     pub fn go_back(&mut self) -> Option<String> {
