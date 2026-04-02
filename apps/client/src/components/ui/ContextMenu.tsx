@@ -177,10 +177,10 @@ const ContextMenu = ({ isOpen, x, y, onClose, items }: ContextMenuProps) => {
           }}
         >
           <div
-            className={`flex cursor-pointer items-center justify-between px-3 py-1.5 text-sm ${
+            className={`flex cursor-pointer items-center justify-between px-3 py-1.5 text-[13px] ${
               item.disabled
                 ? 'text-xp-text-muted cursor-not-allowed'
-                : 'text-xp-text hover:bg-xp-surface-light'
+                : 'text-xp-text hover:bg-white/[0.06]'
             } `}
             onClick={(e) => {
               e.stopPropagation();
@@ -206,7 +206,11 @@ const ContextMenu = ({ isOpen, x, y, onClose, items }: ContextMenuProps) => {
               <span>{item.label}</span>
             </div>
             <div className="flex items-center space-x-2">
-              {item.shortcut && <span className="text-xp-text-muted text-xs">{item.shortcut}</span>}
+              {item.shortcut && (
+                <span className="text-xp-text-muted rounded-md bg-white/[0.10] px-1.5 py-0.5 text-xs">
+                  {item.shortcut}
+                </span>
+              )}
               {hasSubmenu && (
                 <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                   <path
@@ -232,8 +236,16 @@ const ContextMenu = ({ isOpen, x, y, onClose, items }: ContextMenuProps) => {
         {/* Main menu */}
         <div
           ref={menuRef}
-          className="bg-xp-popover border-xp-border/60 context-menu-scroll fixed z-50 min-w-48 rounded-lg border py-1 shadow-xl shadow-black/20 backdrop-blur-xl"
-          style={{ left: x, top: y, maxHeight: '70vh', overflowY: 'auto', pointerEvents: 'auto' }}
+          className="context-menu-scroll fixed z-50 min-w-48 rounded-2xl border border-white/[0.08] py-1"
+          style={{
+            left: x,
+            top: y,
+            maxHeight: '70vh',
+            overflowY: 'auto',
+            pointerEvents: 'auto',
+            background: 'var(--xp-popover, #202526)',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
+          }}
         >
           {renderMenuItems(items, 0, true)}
         </div>
@@ -242,7 +254,7 @@ const ContextMenu = ({ isOpen, x, y, onClose, items }: ContextMenuProps) => {
         {submenuStack.map((sub, idx) => (
           <div
             key={sub.id}
-            className="bg-xp-popover border-xp-border/60 context-menu-scroll fixed min-w-48 rounded-lg border py-1 shadow-xl shadow-black/20 backdrop-blur-xl"
+            className="context-menu-scroll fixed min-w-48 rounded-2xl border border-white/[0.08] py-1"
             style={{
               left: sub.left,
               top: sub.top,
@@ -250,6 +262,8 @@ const ContextMenu = ({ isOpen, x, y, onClose, items }: ContextMenuProps) => {
               overflowY: 'auto',
               zIndex: 60 + idx,
               pointerEvents: 'auto',
+              background: 'var(--xp-popover, #202526)',
+              boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
             }}
             onMouseEnter={cancelClose}
             onMouseLeave={() => scheduleClose(idx)}

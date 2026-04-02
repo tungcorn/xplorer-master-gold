@@ -416,9 +416,9 @@ const NavigationBar = ({ currentPath, navigateToPath, refetch: _refetch }: Navig
   }, [currentPath, t]);
 
   return (
-    <div className="bg-xp-surface border-xp-border border-b px-3 py-1">
+    <div className="flex items-center px-2" style={{ height: 36 }}>
       <div
-        className="bg-xp-bg border-xp-border relative flex min-w-0 items-center rounded border px-2 py-0.5"
+        className="relative flex min-w-0 flex-1 items-center px-1"
         style={
           isEditingPath && validationBorderColor
             ? {
@@ -461,7 +461,7 @@ const NavigationBar = ({ currentPath, navigateToPath, refetch: _refetch }: Navig
                     onChange={(e) => handleInputChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onBlur={handleBlur}
-                    className="w-full bg-transparent text-sm outline-none"
+                    className="w-full bg-transparent text-[13px] outline-none"
                     placeholder={t('navigation.pathPlaceholder')}
                     aria-label={t('navigation.filePath')}
                     aria-expanded={showDropdown}
@@ -568,21 +568,21 @@ const NavigationBar = ({ currentPath, navigateToPath, refetch: _refetch }: Navig
             return (
               <div className="flex h-full cursor-text items-center gap-2 px-1">
                 <span className="text-xp-text-muted">{special.icon}</span>
-                <span className="text-sm font-medium">{special.label}</span>
+                <span className="text-[13px] font-medium">{special.label}</span>
               </div>
             );
           }
           if (collectionLabel) {
             return (
               <div className="flex h-full cursor-text items-center gap-2 px-1">
-                <span className="text-sm font-medium">{collectionLabel}</span>
+                <span className="text-[13px] font-medium">{collectionLabel}</span>
               </div>
             );
           }
           return (
             <nav
               aria-label="Breadcrumb"
-              className="scrollbar-none flex h-full cursor-text items-center gap-0.5 overflow-x-auto"
+              className="group/nav scrollbar-none flex h-full cursor-text items-center gap-0.5 overflow-x-auto"
             >
               {segments.map((seg, i) => {
                 const segContent = (() => {
@@ -616,9 +616,9 @@ const NavigationBar = ({ currentPath, navigateToPath, refetch: _refetch }: Navig
                         e.stopPropagation();
                         navigateToPath?.(seg.fullPath);
                       }}
-                      className={`hover:bg-xp-surface-light max-w-[160px] flex-shrink-0 truncate rounded px-1.5 py-0.5 text-sm transition-colors ${
+                      className={`max-w-[160px] flex-shrink-0 truncate rounded px-1.5 py-0.5 text-[13px] transition-colors hover:bg-white/[0.03] ${
                         i === segments.length - 1
-                          ? 'text-xp-text font-semibold'
+                          ? 'text-xp-text font-medium'
                           : 'text-xp-text-muted hover:text-xp-text'
                       }`}
                       title={seg.fullPath}
@@ -635,7 +635,7 @@ const NavigationBar = ({ currentPath, navigateToPath, refetch: _refetch }: Navig
                   e.stopPropagation();
                   setIsEditingPath(true);
                 }}
-                className="hover:bg-xp-surface-light text-xp-text-muted hover:text-xp-text ml-1 flex-shrink-0 rounded p-0.5 transition-colors"
+                className="text-xp-text-muted hover:text-xp-text ml-1 flex-shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover/nav:opacity-100"
                 title={t('navigation.editPath')}
                 aria-label={t('navigation.editPath')}
               >

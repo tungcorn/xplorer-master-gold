@@ -425,6 +425,7 @@ const MainLayout = (props: MainLayoutProps) => {
             leftSidebarCollapsed={leftSidebarCollapsed}
             setLeftSidebarCollapsed={setLeftSidebarCollapsed}
             currentPath={currentPath}
+            navigateToPath={navigateToPath}
             navigateUp={navigateUp}
             refetch={refetch}
             navigateBackInHistory={navigateBackInHistory}

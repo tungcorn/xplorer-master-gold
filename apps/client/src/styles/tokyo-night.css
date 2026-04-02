@@ -120,25 +120,25 @@
 
 /* Scrollbar styling for Tokyo Night theme */
 .xp-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 11px;
+  height: 11px;
 }
 
 .xp-scrollbar::-webkit-scrollbar-track {
-  background: var(--xp-surface);
+  background: transparent;
 }
 
 .xp-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--xp-border);
-  border-radius: 4px;
+  background: #5c6166;
+  border-radius: 999px;
 }
 
 .xp-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--xp-border-light);
+  background: #767c81;
 }
 
 .xp-scrollbar::-webkit-scrollbar-corner {
-  background: var(--xp-surface);
+  background: transparent;
 }
 
 /* Apply scrollbar styling to scrollable areas */
@@ -150,14 +150,14 @@
 
 /* Transition utilities */
 .transition-all {
-  transition: all 0.2s ease-in-out;
+  transition: all 0.09s ease-in-out;
 }
 
 .transition-colors {
   transition:
-    color 0.2s ease-in-out,
-    background-color 0.2s ease-in-out,
-    border-color 0.2s ease-in-out;
+    color 0.09s ease-in-out,
+    background-color 0.09s ease-in-out,
+    border-color 0.09s ease-in-out;
 }
 
 /* Focus styling */
@@ -205,8 +205,8 @@ select:focus {
   opacity: 1;
   transform: scale(1);
   transition:
-    opacity 0.1s ease-out,
-    transform 0.1s ease-out;
+    opacity 0.06s ease-out,
+    transform 0.06s ease-out;
 }
 
 .context-menu-exit {
@@ -218,8 +218,8 @@ select:focus {
   opacity: 0;
   transform: scale(0.95);
   transition:
-    opacity 0.1s ease-in,
-    transform 0.1s ease-in;
+    opacity 0.06s ease-in,
+    transform 0.06s ease-in;
 }
 
 /* Loading spinner */
@@ -238,7 +238,6 @@ select:focus {
 
 /* File selection animation */
 .file-selected {
-  animation: selectPulse 0.3s ease-out;
 }
 
 @keyframes selectPulse {

@@ -11,6 +11,11 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 :root {
@@ -329,7 +334,7 @@ html.theme-light {
    ═══════════════════════════════════════════════════════════════════ */
 
 html.font-small {
-  font-size: 12px;
+  font-size: 13px;
 }
 html.font-medium {
   font-size: 14px;
@@ -497,11 +502,11 @@ html.theme-glass {
   background: transparent;
 }
 .theme-glass ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
+  background: #5c6166;
+  border-radius: 999px;
 }
 .theme-glass ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: #767c81;
 }
 
 /* ── Borders ──────────────────────────────────────────────────── */
@@ -704,20 +709,20 @@ html.theme-glass {
 
   /* Scrollbar Styling */
   ::-webkit-scrollbar {
-    width: 8px;
+    width: 11px;
   }
 
   ::-webkit-scrollbar-track {
-    background: var(--xp-surface);
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: var(--xp-border);
-    border-radius: 4px;
+    background: #5c6166;
+    border-radius: 999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--xp-blue);
+    background: #767c81;
   }
 
   /* 3D View Styles */
@@ -769,8 +774,8 @@ html.theme-glass {
 /* Component Specific Styles */
 .file-item {
   transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease;
+    background-color 0.09s ease,
+    border-color 0.09s ease;
 }
 
 .file-item:hover {
@@ -784,7 +789,7 @@ html.theme-glass {
 }
 
 .sidebar-item {
-  transition: all 0.2s ease;
+  transition: all 0.09s ease;
 }
 
 .sidebar-item:hover {
@@ -797,7 +802,7 @@ html.theme-glass {
 }
 
 .tab-item {
-  transition: all 0.2s ease;
+  transition: all 0.09s ease;
 }
 
 .tab-item:hover {
@@ -810,7 +815,7 @@ html.theme-glass {
 }
 
 .extension-card {
-  transition: all 0.2s ease;
+  transition: all 0.09s ease;
 }
 
 .extension-card:hover {
@@ -819,7 +824,7 @@ html.theme-glass {
 }
 
 .chat-message {
-  animation: slideIn 0.3s ease-out;
+  animation: slideIn 0.09s ease-out;
 }
 
 @keyframes slideIn {
@@ -846,7 +851,7 @@ html.theme-glass {
 }
 
 .tour-tooltip-enter {
-  animation: tour-tooltip-enter 0.3s ease-out;
+  animation: tour-tooltip-enter 0.12s ease-out;
 }
 
 @keyframes tour-spotlight-pulse {

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, forwardRef } from 'react';
+import { useRef, useState, useEffect, useCallback, forwardRef } from 'react';
 import { useWindowEvent } from '@/hooks/use-window-event';
 import { isTauri } from '@/lib/transport';
 import {
@@ -10,12 +10,14 @@ import {
   Columns,
   Rows,
   ChevronUp,
+  ChevronRight,
   RefreshCw,
   FolderClosed,
   File,
   FileCode,
   GitCompareArrows,
   Cloud,
+  HardDrive,
 } from 'lucide-react';
 import { ROOT_PATH } from '@/lib/constants';
 import type { TabItem } from '@/types/split-view';
@@ -30,6 +32,7 @@ interface TopBarProps {
   leftSidebarCollapsed: boolean;
   setLeftSidebarCollapsed: (collapsed: boolean) => void;
   currentPath: string;
+  navigateToPath?: (path: string) => void;
   // Navigation
   navigateUp?: () => void;
   refetch?: () => void;
@@ -81,6 +84,7 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
       leftSidebarCollapsed,
       setLeftSidebarCollapsed,
       currentPath,
+      navigateToPath,
       navigateUp,
       refetch,
       navigateBackInHistory,
@@ -173,11 +177,26 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
       };
     }, []);
 
+    const breadcrumbSegments = useCallback(() => {
+      if (!currentPath || currentPath.startsWith('xplorer://')) return [];
+      const normalized = currentPath.replace(/\\/g, '/');
+      const parts = normalized.split('/').filter(Boolean);
+      const segs: { name: string; fullPath: string }[] = [];
+      let acc = '';
+      for (const part of parts) {
+        acc = acc ? `${acc}/${part}` : part;
+        const fullPath = acc.includes(':') && !acc.includes(':/') ? `${acc}/` : acc;
+        segs.push({ name: part, fullPath });
+      }
+      return segs;
+    }, [currentPath]);
+
     return (
-      <div data-tour={dataTour} className="bg-xp-titlebar border-xp-border flex-none border-b">
-        {/* Single compact row: sidebar toggle + nav + tabs + window controls */}
+      <div data-tour={dataTour} className="flex-none">
+        {/* ── Row 1: Tab strip + window controls ──────────────── */}
         <div
-          className="flex items-center gap-0.5 px-2"
+          className="flex items-center"
+          style={{ height: 40, background: 'var(--xp-titlebar)' }}
           onMouseDown={(e) => {
             if (
               !(e.target as HTMLElement).closest(
@@ -198,13 +217,138 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
             }
           }}
         >
+          {/* Mac traffic lights offset */}
+          {isMac && <div style={{ width: 72, flexShrink: 0 }} />}
+
+          {/* Tabs */}
+          <div
+            className="scrollbar-none flex min-w-0 flex-1 items-end overflow-x-auto px-1"
+            style={{ paddingTop: 6 }}
+          >
+            {tabs?.map((tab) => {
+              const TabIcon = getTabIcon(tab);
+              const isActive = activeTabId === tab.id;
+              return (
+                <div
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`group flex min-w-0 max-w-[240px] flex-shrink-0 cursor-pointer items-center gap-1.5 px-3 ${
+                    isActive ? 'text-xp-text' : 'text-xp-text-muted hover:text-xp-text-secondary'
+                  }`}
+                  style={{
+                    height: 34,
+                    fontSize: 13,
+                    borderRadius: '10px 10px 0 0',
+                    background: isActive ? 'var(--xp-bg)' : 'transparent',
+                  }}
+                  onClick={() => onSwitchTab?.(tab.id)}
+                >
+                  <TabIcon size={13} className="flex-shrink-0 opacity-70" />
+                  <span className="truncate font-medium">{tab.name}</span>
+                  {tabs && tabs.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCloseTab?.(tab.id);
+                      }}
+                      className="ml-0.5 flex-shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-white/10 group-hover:opacity-100"
+                      style={{ fontSize: 14 }}
+                      aria-label={`Close ${tab.name}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {/* New tab */}
+            {onAddTab && (
+              <button
+                onClick={onAddTab}
+                className="text-xp-text-muted hover:text-xp-text flex-shrink-0 rounded p-1 transition-colors hover:bg-white/[0.06]"
+                style={{
+                  width: 28,
+                  height: 28,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title={t('topBar.newTabShortcut')}
+                aria-label={t('topBar.newTab')}
+              >
+                <Plus size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Split actions */}
+          <div className="flex flex-shrink-0 items-center gap-0.5 px-1">
+            {onSplitRight && (
+              <button
+                onClick={onSplitRight}
+                className="text-xp-text-muted hover:text-xp-text rounded p-1 hover:bg-white/[0.06]"
+                title={t('topBar.splitRightShortcut')}
+                aria-label={t('topBar.splitRight')}
+              >
+                <Columns size={14} />
+              </button>
+            )}
+            {onSplitDown && (
+              <button
+                onClick={onSplitDown}
+                className="text-xp-text-muted hover:text-xp-text rounded p-1 hover:bg-white/[0.06]"
+                title={t('topBar.splitDownShortcut')}
+                aria-label={t('topBar.splitDown')}
+              >
+                <Rows size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Window controls (Windows/Linux) */}
+          {!isMac && (
+            <div
+              className="flex flex-shrink-0 items-center"
+              role="toolbar"
+              aria-label="Window controls"
+            >
+              <button
+                onClick={() => appWindowRef.current?.minimize()}
+                className="rounded p-1.5 transition-colors hover:bg-white/[0.06]"
+                aria-label={t('topBar.minimize')}
+              >
+                <Minus size={14} />
+              </button>
+              <button
+                onClick={() => appWindowRef.current?.toggleMaximize()}
+                className="rounded p-1.5 transition-colors hover:bg-white/[0.06]"
+                aria-label={isMaximized ? t('topBar.restore') : t('topBar.maximize')}
+              >
+                {isMaximized ? <Copy size={14} /> : <Square size={14} />}
+              </button>
+              <button
+                onClick={() => appWindowRef.current?.close()}
+                className="xp-close-btn rounded p-1.5 transition-colors"
+                aria-label={t('topBar.closeWindow')}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Row 2: Toolbar (hamburger + nav + breadcrumb + filter) ── */}
+        <div
+          className="border-xp-border flex items-center gap-0.5 border-b px-2"
+          style={{ height: 42, background: 'var(--xp-bg)' }}
+        >
           {/* Sidebar toggle */}
           <button
             onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
-            className="hover:bg-xp-surface-light flex-shrink-0 rounded p-1 transition-colors"
+            className="flex-shrink-0 rounded p-1 transition-colors hover:bg-white/[0.06]"
             aria-label={t('topBar.toggleSidebar')}
             title={t('topBar.toggleSidebarShortcut')}
-            style={isMac ? { marginLeft: '60px' } : undefined}
           >
             <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
               <path
@@ -215,14 +359,17 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
             </svg>
           </button>
 
-          <div className="bg-xp-border mx-0.5 h-5 w-px flex-shrink-0" />
+          <div
+            className="mx-0.5 h-5 w-px flex-shrink-0"
+            style={{ background: 'rgba(255,255,255,0.08)' }}
+          />
 
           {/* Nav buttons */}
           {navigateBackInHistory && (
             <button
               onClick={navigateBackInHistory}
               disabled={!canNavigateBackInHistory?.()}
-              className="hover:bg-xp-surface-light flex-shrink-0 rounded p-1 transition-colors disabled:opacity-30"
+              className="flex-shrink-0 rounded p-1 transition-colors hover:bg-white/[0.06] disabled:opacity-30"
               title={t('topBar.goBack')}
               aria-label={t('topBar.goBack')}
             >
@@ -239,7 +386,7 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
             <button
               onClick={navigateForwardInHistory}
               disabled={!canNavigateForwardInHistory?.()}
-              className="hover:bg-xp-surface-light flex-shrink-0 rounded p-1 transition-colors disabled:opacity-30"
+              className="flex-shrink-0 rounded p-1 transition-colors hover:bg-white/[0.06] disabled:opacity-30"
               title={t('topBar.goForward')}
               aria-label={t('topBar.goForward')}
             >
@@ -256,7 +403,7 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
             <button
               onClick={navigateUp}
               disabled={currentPath === ROOT_PATH}
-              className="hover:bg-xp-surface-light flex-shrink-0 rounded p-1 transition-colors disabled:opacity-30"
+              className="flex-shrink-0 rounded p-1 transition-colors hover:bg-white/[0.06] disabled:opacity-30"
               title={t('topBar.goUp')}
               aria-label={t('topBar.goUp')}
             >
@@ -266,7 +413,7 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
           {refetch && (
             <button
               onClick={refetch}
-              className="hover:bg-xp-surface-light flex-shrink-0 rounded p-1 transition-colors"
+              className="flex-shrink-0 rounded p-1 transition-colors hover:bg-white/[0.06]"
               title={t('topBar.refresh')}
               aria-label={t('topBar.refresh')}
             >
@@ -274,14 +421,57 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
             </button>
           )}
 
-          {/* Quick Filter dropdown (built-in + user collections with no basePath) */}
+          <div
+            className="mx-1 h-5 w-px flex-shrink-0"
+            style={{ background: 'rgba(255,255,255,0.08)' }}
+          />
+
+          {/* Inline breadcrumb */}
+          <nav
+            aria-label="Breadcrumb"
+            className="scrollbar-none flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+          >
+            {(() => {
+              const segs = breadcrumbSegments();
+              if (segs.length === 0) {
+                return <span className="text-xp-text-muted text-[13px]">{currentPath}</span>;
+              }
+              return segs.map((seg, i) => (
+                <span key={seg.fullPath} className="flex flex-shrink-0 items-center">
+                  {i > 0 && (
+                    <ChevronRight size={12} className="text-xp-text-muted mx-0.5 opacity-60" />
+                  )}
+                  <button
+                    onClick={() => navigateToPath?.(seg.fullPath)}
+                    className={`max-w-[160px] truncate rounded px-1.5 py-0.5 text-[13px] transition-colors hover:bg-white/[0.03] ${
+                      i === segs.length - 1
+                        ? 'text-xp-text font-medium'
+                        : 'text-xp-text-muted hover:text-xp-text'
+                    }`}
+                    title={seg.fullPath}
+                  >
+                    {i === 0 && /^[A-Za-z]:$/.test(seg.name) ? (
+                      <span className="flex items-center gap-1">
+                        <HardDrive size={12} className="flex-shrink-0" />
+                        {seg.name}
+                      </span>
+                    ) : (
+                      seg.name
+                    )}
+                  </button>
+                </span>
+              ));
+            })()}
+          </nav>
+
+          {/* Quick Filter dropdown */}
           <div ref={filterDropdownRef} style={{ position: 'relative' }} className="flex-shrink-0">
             <button
               onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
               className={`flex flex-shrink-0 items-center gap-1 rounded p-1 transition-colors ${
                 activeCollectionFilter
                   ? 'text-xp-text'
-                  : 'hover:bg-xp-surface-light text-xp-text-muted hover:text-xp-text'
+                  : 'text-xp-text-muted hover:text-xp-text hover:bg-white/[0.06]'
               }`}
               style={
                 activeCollectionFilter
@@ -332,15 +522,12 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
                   minWidth: '200px',
                   maxHeight: '320px',
                   overflowY: 'auto',
-                  borderRadius: '8px',
-                  backgroundColor: 'var(--xp-surface)',
-                  backdropFilter: 'blur(12px)',
-                  WebkitBackdropFilter: 'blur(12px)',
-                  border: '1px solid var(--xp-border)',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  borderRadius: '16px',
+                  backgroundColor: 'var(--xp-popover)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
                   padding: '4px',
                   marginTop: '4px',
-                  animation: 'fadeIn 100ms ease-out',
                 }}
               >
                 {quickFilters.map((col) => {
@@ -357,7 +544,7 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
                       onMouseEnter={(e) => {
                         if (!isActive) {
                           (e.currentTarget as HTMLElement).style.backgroundColor =
-                            'var(--xp-surface-light)';
+                            'rgba(255,255,255,0.03)';
                         }
                       }}
                       onMouseLeave={(e) => {
@@ -396,13 +583,12 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
                     </button>
                   );
                 })}
-                {/* Divider + clear */}
                 {activeCollectionFilter && (
                   <>
                     <div
                       style={{
                         height: '1px',
-                        backgroundColor: 'var(--xp-border)',
+                        backgroundColor: 'rgba(255,255,255,0.08)',
                         margin: '4px 0',
                       }}
                     />
@@ -411,7 +597,7 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
                       style={{ color: 'var(--xp-text-muted)' }}
                       onMouseEnter={(e) => {
                         (e.currentTarget as HTMLElement).style.backgroundColor =
-                          'var(--xp-surface-light)';
+                          'rgba(255,255,255,0.03)';
                       }}
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
@@ -429,106 +615,9 @@ const TopBar = forwardRef<TopBarHandle, TopBarProps>(
               </div>
             )}
           </div>
-
-          {/* Separator */}
-          <div className="bg-xp-border mx-0.5 h-5 w-px flex-shrink-0" />
-
-          {/* Tabs */}
-          <div className="scrollbar-none flex min-w-0 flex-1 overflow-x-auto">
-            {tabs?.map((tab) => {
-              const TabIcon = getTabIcon(tab);
-              const isActive = activeTabId === tab.id;
-              return (
-                <div
-                  key={tab.id}
-                  className={`border-xp-border group flex min-w-0 max-w-[180px] flex-shrink-0 cursor-pointer items-center border-r px-3 py-1 ${
-                    isActive ? 'bg-xp-bg border-b-xp-blue border-b-2' : 'hover:bg-xp-surface-light'
-                  }`}
-                  onClick={() => onSwitchTab?.(tab.id)}
-                >
-                  <TabIcon size={13} className="text-xp-text-secondary mr-1.5 flex-shrink-0" />
-                  <span className="truncate text-xs font-medium">{tab.name}</span>
-                  {tabs.length > 1 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onCloseTab?.(tab.id);
-                      }}
-                      className="hover:bg-xp-surface-light ml-1 flex-shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100"
-                      aria-label={`Close ${tab.name}`}
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Split/tab actions */}
-          <div className="ml-0.5 flex flex-shrink-0 items-center gap-0.5">
-            {onAddTab && (
-              <button
-                onClick={onAddTab}
-                className="hover:bg-xp-surface-light text-xp-text-muted hover:text-xp-text rounded p-1"
-                title={t('topBar.newTabShortcut')}
-                aria-label={t('topBar.newTab')}
-              >
-                <Plus size={14} />
-              </button>
-            )}
-            {onSplitRight && (
-              <button
-                onClick={onSplitRight}
-                className="hover:bg-xp-surface-light text-xp-text-muted hover:text-xp-text rounded p-1"
-                title={t('topBar.splitRightShortcut')}
-                aria-label={t('topBar.splitRight')}
-              >
-                <Columns size={14} />
-              </button>
-            )}
-            {onSplitDown && (
-              <button
-                onClick={onSplitDown}
-                className="hover:bg-xp-surface-light text-xp-text-muted hover:text-xp-text rounded p-1"
-                title={t('topBar.splitDownShortcut')}
-                aria-label={t('topBar.splitDown')}
-              >
-                <Rows size={14} />
-              </button>
-            )}
-          </div>
-
-          {!isMac && (
-            <div
-              className="ml-1 flex flex-shrink-0 items-center"
-              role="toolbar"
-              aria-label="Window controls"
-            >
-              <button
-                onClick={() => appWindowRef.current?.minimize()}
-                className="hover:bg-xp-surface-light rounded p-1.5 transition-colors"
-                aria-label={t('topBar.minimize')}
-              >
-                <Minus size={14} />
-              </button>
-              <button
-                onClick={() => appWindowRef.current?.toggleMaximize()}
-                className="hover:bg-xp-surface-light rounded p-1.5 transition-colors"
-                aria-label={isMaximized ? t('topBar.restore') : t('topBar.maximize')}
-              >
-                {isMaximized ? <Copy size={14} /> : <Square size={14} />}
-              </button>
-              <button
-                onClick={() => appWindowRef.current?.close()}
-                className="xp-close-btn rounded p-1.5 transition-colors"
-                aria-label={t('topBar.closeWindow')}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          )}
         </div>
+
+        {/* ── Cross-tab selection banner ──────────────────────── */}
         {hasMultiTabSelection && crossTabTotalCount > 0 && (
           <div
             style={{
