@@ -77,13 +77,13 @@ const SidebarQuickAccess = ({ currentPath, navigateToPath }: SidebarQuickAccessP
             {
               path: userDirectories.desktop,
               Icon: Monitor,
-              color: 'text-xp-purple',
+              color: 'text-xp-cyan',
               labelKey: 'sidebar.desktop' as const,
             },
             {
               path: userDirectories.pictures,
               Icon: Image,
-              color: 'text-xp-pink',
+              color: 'text-xp-orange',
               labelKey: 'sidebar.pictures' as const,
             },
           ] as const
@@ -95,7 +95,7 @@ const SidebarQuickAccess = ({ currentPath, navigateToPath }: SidebarQuickAccessP
               key={labelKey}
               onClick={() => navigateToPath(path)}
               className={`flex w-full items-center rounded px-2 py-1 text-xs transition-colors ${
-                isActive ? 'bg-xp-blue/15 text-xp-blue' : 'hover:bg-xp-surface-light text-xp-text'
+                isActive ? 'text-xp-text bg-white/[0.04]' : 'text-xp-text hover:bg-white/[0.03]'
               }`}
               aria-label={t('sidebar.navigateTo', { label })}
             >
@@ -117,7 +117,7 @@ const SidebarQuickAccess = ({ currentPath, navigateToPath }: SidebarQuickAccessP
               key="icloud"
               onClick={() => navigateToPath(iCloudPath)}
               className={`flex w-full items-center rounded px-2 py-1 text-xs transition-colors ${
-                isActive ? 'bg-xp-blue/15 text-xp-blue' : 'hover:bg-xp-surface-light text-xp-text'
+                isActive ? 'text-xp-text bg-white/[0.04]' : 'text-xp-text hover:bg-white/[0.03]'
               }`}
               aria-label={t('sidebar.navigateTo', { label })}
             >

@@ -168,7 +168,7 @@ const SidebarFileTree = ({
           aria-selected={currentPath === file.path}
           aria-expanded={file.is_dir ? isExpanded : undefined}
           aria-label={`${file.name}${file.is_dir ? ', folder' : ', file'}`}
-          className={`hover:bg-xp-surface-light flex cursor-pointer items-center rounded px-1 py-1 text-xs transition-colors ${currentPath === file.path ? 'bg-xp-blue text-xp-blue border-xp-blue border-l-2 bg-opacity-25' : 'text-xp-text'} `}
+          className={`flex cursor-pointer items-center rounded px-1 py-1 text-xs transition-colors hover:bg-white/[0.03] ${currentPath === file.path ? 'text-xp-text bg-white/[0.04]' : 'text-xp-text'} `}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
           onClick={() => handleItemClick(file)}
           onContextMenu={(e) => handleItemRightClick(file, e)}
@@ -176,7 +176,7 @@ const SidebarFileTree = ({
           <div className="flex min-w-0 flex-1 items-center space-x-1">
             {file.is_dir ? (
               <button
-                className="hover:bg-xp-surface-light flex h-5 w-5 flex-shrink-0 items-center justify-center rounded p-0.5 transition-colors"
+                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded p-0.5 transition-colors hover:bg-white/[0.06]"
                 onClick={(e) => toggleFolder(file.path, e)}
                 aria-expanded={isExpanded}
                 aria-label={isExpanded ? `Collapse ${file.name}` : `Expand ${file.name}`}
@@ -265,11 +265,11 @@ const SidebarFileTree = ({
                 aria-selected={currentPath === rootPath}
                 aria-expanded={expandedFolders.has(rootPath)}
                 aria-label={`Root drive ${rootPath}`}
-                className={`hover:bg-xp-surface-light flex cursor-pointer items-center rounded px-1 py-1 text-xs font-medium transition-colors ${currentPath === rootPath ? 'bg-xp-blue text-xp-blue border-xp-blue border-l-2 bg-opacity-25' : 'text-xp-text'} `}
+                className={`flex cursor-pointer items-center rounded px-1 py-1 text-xs font-medium transition-colors hover:bg-white/[0.03] ${currentPath === rootPath ? 'text-xp-text bg-white/[0.04]' : 'text-xp-text'} `}
                 onClick={() => navigateToPath(rootPath)}
               >
                 <button
-                  className="hover:bg-xp-surface-light flex h-5 w-5 flex-shrink-0 items-center justify-center rounded p-0.5 transition-colors"
+                  className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded p-0.5 transition-colors hover:bg-white/[0.06]"
                   onClick={(e) => toggleFolder(rootPath, e)}
                   aria-expanded={expandedFolders.has(rootPath)}
                   aria-label={

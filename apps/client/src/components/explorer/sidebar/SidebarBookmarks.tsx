@@ -51,7 +51,7 @@ const SidebarBookmarks = ({ navigateToPath, handleFileRightClick }: SidebarBookm
           return (
             <div
               key={bookmark.path}
-              className="hover:bg-xp-surface-light group flex w-full cursor-pointer items-center rounded px-2 py-1 text-xs transition-colors"
+              className="group flex w-full cursor-pointer items-center rounded px-2 py-1 text-xs transition-colors hover:bg-white/[0.03]"
               onClick={() => navigateToPath(bookmark.path)}
               onContextMenu={(e) => {
                 e.preventDefault();

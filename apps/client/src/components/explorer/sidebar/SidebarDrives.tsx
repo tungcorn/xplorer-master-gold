@@ -85,7 +85,7 @@ const SidebarDrives = ({ navigateToPath }: SidebarDrivesProps) => {
           <div key={drive.path} className="group relative">
             <button
               onClick={() => navigateToPath(drive.path)}
-              className="hover:bg-xp-surface-light w-full rounded px-2 py-1 text-left text-xs transition-colors"
+              className="w-full rounded px-2 py-1 text-left text-xs transition-colors hover:bg-white/[0.03]"
               aria-label={t('navigation.navigateTo', {
                 name: drive.letter ? `${drive.letter}:` : drive.label,
               })}
@@ -117,7 +117,7 @@ const SidebarDrives = ({ navigateToPath }: SidebarDrivesProps) => {
             {/* Eject button — only shown for non-root/removable volumes */}
             {drive.path !== '/' && drive.path !== 'C:\\' && (
               <button
-                className="text-xp-text-muted hover:text-xp-text hover:bg-xp-surface-light absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                className="text-xp-text-muted hover:text-xp-text absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 opacity-0 transition-opacity hover:bg-white/[0.06] group-hover:opacity-100"
                 onClick={(e) => handleEjectVolume(drive.path, e)}
                 title={t('drives.eject')}
                 aria-label={t('drives.eject')}
@@ -131,7 +131,7 @@ const SidebarDrives = ({ navigateToPath }: SidebarDrivesProps) => {
       {!isWindows && homePath && (
         <button
           onClick={() => navigateToPath(homePath)}
-          className="hover:bg-xp-surface-light flex w-full items-center rounded px-2 py-1 text-xs transition-colors"
+          className="flex w-full items-center rounded px-2 py-1 text-xs transition-colors hover:bg-white/[0.03]"
         >
           <User size={15} className="text-xp-cyan mr-2.5 flex-shrink-0" />{' '}
           {homePath.split('/').pop()}
