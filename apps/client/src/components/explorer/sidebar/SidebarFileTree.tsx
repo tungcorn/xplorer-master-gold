@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { HardDrive, FolderTree, ChevronDown, ChevronRight } from 'lucide-react';
+import { HardDrive } from 'lucide-react';
 import { FileEntry, TauriAPI } from '@/lib/tauri-api';
 import { PATH_SEPARATOR, ROOT_PATH } from '@/lib/constants';
 import { getFolderColorHex } from '@/lib/folder-colors';
 import { useWindowEvent } from '@/hooks/use-window-event';
-import { useTranslation } from 'react-i18next';
 
 type SortBy = 'name' | 'dateModified' | 'size' | 'type';
 type SortOrder = 'asc' | 'desc';
@@ -15,8 +14,6 @@ interface SidebarFileTreeProps {
   handleFileClick: (file: FileEntry) => void;
   handleFileRightClick?: (file: FileEntry, event: React.MouseEvent) => void;
   getFileIcon: (file: FileEntry) => React.ReactNode;
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
 }
 
 const SidebarFileTree = ({
@@ -25,10 +22,7 @@ const SidebarFileTree = ({
   handleFileClick,
   handleFileRightClick,
   getFileIcon,
-  collapsed,
-  onToggleCollapsed,
 }: SidebarFileTreeProps) => {
-  const { t } = useTranslation();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [folderContents, setFolderContents] = useState<Map<string, FileEntry[]>>(new Map());
   const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
@@ -261,66 +255,51 @@ const SidebarFileTree = ({
       tabIndex={0}
       data-sidebar-section="fileTree"
     >
-      <button
-        className="text-xp-text-muted hover:bg-xp-surface-light/50 bg-xp-surface sticky top-0 z-10 flex w-full items-center px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors"
-        onClick={onToggleCollapsed}
-        aria-expanded={!collapsed}
-      >
-        {collapsed ? (
-          <ChevronRight className="mr-1 h-3 w-3 flex-shrink-0" />
-        ) : (
-          <ChevronDown className="mr-1 h-3 w-3 flex-shrink-0" />
-        )}
-        <FolderTree size={12} className="mr-1 flex-shrink-0" />
-        {t('sidebar.fileTree')}
-      </button>
-      {!collapsed && (
-        <div className="space-y-0 px-3 pb-2" role="tree" aria-label="Directory tree">
-          {!currentPath.startsWith('xplorer') &&
-            !currentPath.startsWith('collection://') &&
-            sortedRootContents && (
-              <div>
-                <div
-                  role="treeitem"
-                  aria-selected={currentPath === rootPath}
+      <div className="space-y-0 px-3 pb-2 pt-2" role="tree" aria-label="Directory tree">
+        {!currentPath.startsWith('xplorer') &&
+          !currentPath.startsWith('collection://') &&
+          sortedRootContents && (
+            <div>
+              <div
+                role="treeitem"
+                aria-selected={currentPath === rootPath}
+                aria-expanded={expandedFolders.has(rootPath)}
+                aria-label={`Root drive ${rootPath}`}
+                className={`hover:bg-xp-surface-light flex cursor-pointer items-center rounded px-1 py-1 text-xs font-medium transition-colors ${currentPath === rootPath ? 'bg-xp-blue text-xp-blue border-xp-blue border-l-2 bg-opacity-25' : 'text-xp-text'} `}
+                onClick={() => navigateToPath(rootPath)}
+              >
+                <button
+                  className="hover:bg-xp-surface-light flex h-5 w-5 flex-shrink-0 items-center justify-center rounded p-0.5 transition-colors"
+                  onClick={(e) => toggleFolder(rootPath, e)}
                   aria-expanded={expandedFolders.has(rootPath)}
-                  aria-label={`Root drive ${rootPath}`}
-                  className={`hover:bg-xp-surface-light flex cursor-pointer items-center rounded px-1 py-1 text-xs font-medium transition-colors ${currentPath === rootPath ? 'bg-xp-blue text-xp-blue border-xp-blue border-l-2 bg-opacity-25' : 'text-xp-text'} `}
-                  onClick={() => navigateToPath(rootPath)}
+                  aria-label={
+                    expandedFolders.has(rootPath) ? `Collapse ${rootPath}` : `Expand ${rootPath}`
+                  }
                 >
-                  <button
-                    className="hover:bg-xp-surface-light flex h-5 w-5 flex-shrink-0 items-center justify-center rounded p-0.5 transition-colors"
-                    onClick={(e) => toggleFolder(rootPath, e)}
-                    aria-expanded={expandedFolders.has(rootPath)}
-                    aria-label={
-                      expandedFolders.has(rootPath) ? `Collapse ${rootPath}` : `Expand ${rootPath}`
-                    }
+                  <svg
+                    className={`h-3 w-3 transition-transform ${expandedFolders.has(rootPath) ? 'rotate-90' : ''}`}
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
                   >
-                    <svg
-                      className={`h-3 w-3 transition-transform ${expandedFolders.has(rootPath) ? 'rotate-90' : ''}`}
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                  <HardDrive size={14} className="text-xp-text-secondary mr-1 flex-shrink-0" />
-                  <span className="truncate">{rootPath}</span>
-                </div>
-
-                {expandedFolders.has(rootPath) && (
-                  <div role="group" aria-label={`Contents of ${rootPath}`}>
-                    {sortedRootContents.map((file) => renderFileItem(file, 1))}
-                  </div>
-                )}
+                    <path
+                      fillRule="evenodd"
+                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+                <HardDrive size={14} className="text-xp-text-secondary mr-1 flex-shrink-0" />
+                <span className="truncate">{rootPath}</span>
               </div>
-            )}
-        </div>
-      )}
+
+              {expandedFolders.has(rootPath) && (
+                <div role="group" aria-label={`Contents of ${rootPath}`}>
+                  {sortedRootContents.map((file) => renderFileItem(file, 1))}
+                </div>
+              )}
+            </div>
+          )}
+      </div>
     </div>
   );
 };

@@ -270,8 +270,8 @@ const MainLayout = (props: MainLayoutProps) => {
     setCrossTabDialogOpen,
     activeCollectionFilter,
     setActiveCollectionFilter,
-    setCollectionEditorOpen,
-    setEditingCollection,
+    setCollectionEditorOpen: _setCollectionEditorOpen,
+    setEditingCollection: _setEditingCollection,
     paneSync,
     fileOps,
     // Dialogs overlay
@@ -474,18 +474,6 @@ const MainLayout = (props: MainLayoutProps) => {
                   getFileIcon={getFileIcon}
                   searchPanelOpen={searchPanelOpen}
                   onToggleSearchPanel={() => setSearchPanelOpen((prev) => !prev)}
-                  onCreateCollection={() => {
-                    setEditingCollection(null);
-                    setCollectionEditorOpen(true);
-                  }}
-                  onEditCollection={(col) => {
-                    setEditingCollection(col);
-                    setCollectionEditorOpen(true);
-                  }}
-                  activeCollectionFilter={activeCollectionFilter}
-                  onToggleCollectionFilter={(col) => {
-                    setActiveCollectionFilter((prev) => (prev?.id === col.id ? null : col));
-                  }}
                 />
                 <ResizeHandle direction="horizontal" onResize={handleLeftResize} />
               </>

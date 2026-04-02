@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import LeftSidebar from '@/components/explorer/LeftSidebar';
 import { FileEntry, TauriAPI } from '@/lib/tauri-api';
@@ -125,14 +125,6 @@ describe('LeftSidebar', () => {
   });
 
   describe('Quick Access Section', () => {
-    it('renders quick access header', async () => {
-      render(<LeftSidebar {...mockProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('quickAccess')).toBeInTheDocument();
-      });
-    });
-
     it('renders Home quick access item', async () => {
       render(<LeftSidebar {...mockProps} />);
 
@@ -208,14 +200,6 @@ describe('LeftSidebar', () => {
   });
 
   describe('Bookmarks Section', () => {
-    it('renders favorites header', async () => {
-      render(<LeftSidebar {...mockProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('favorites')).toBeInTheDocument();
-      });
-    });
-
     it('shows empty bookmarks message when none exist', async () => {
       render(<LeftSidebar {...mockProps} />);
 
@@ -272,19 +256,10 @@ describe('LeftSidebar', () => {
   });
 
   describe('Drives Section', () => {
-    it('renders drives header for Windows', async () => {
-      render(<LeftSidebar {...mockProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('drives')).toBeInTheDocument();
-      });
-    });
-
     it('renders drive list', async () => {
       render(<LeftSidebar {...mockProps} />);
 
       await waitFor(() => {
-        // Component renders drive.letter ? `${drive.letter}:` : drive.label
         expect(screen.getByText('C:')).toBeInTheDocument();
         expect(screen.getByText('D:')).toBeInTheDocument();
       });
@@ -297,81 +272,8 @@ describe('LeftSidebar', () => {
         expect(screen.getByText('C:')).toBeInTheDocument();
       });
 
-      // The drive button wraps the text; click the text element
       fireEvent.click(screen.getByText('C:'));
       expect(mockProps.navigateToPath).toHaveBeenCalledWith('C:\\');
-    });
-  });
-
-  describe('Recent Files Section', () => {
-    it('renders recent header', async () => {
-      render(<LeftSidebar {...mockProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('RECENT')).toBeInTheDocument();
-      });
-    });
-
-    it('expands recent files section when clicked', async () => {
-      vi.mocked(TauriAPI.getRecentFiles).mockResolvedValueOnce([
-        {
-          name: 'recent.txt',
-          path: 'C:\\Users\\Test\\recent.txt',
-          file_type: 'text',
-          opened_at: '2024-01-01T00:00:00Z',
-        },
-      ]);
-
-      render(<LeftSidebar {...mockProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('RECENT')).toBeInTheDocument();
-      });
-
-      // Click to expand the RECENT section
-      fireEvent.click(screen.getByText('RECENT'));
-
-      await waitFor(() => {
-        expect(screen.getByText('recent.txt')).toBeInTheDocument();
-      });
-    });
-
-    it('shows "No recent files" when recent list is empty and expanded', async () => {
-      vi.mocked(TauriAPI.getRecentFiles).mockResolvedValue([]);
-
-      await act(async () => {
-        render(<LeftSidebar {...mockProps} />);
-      });
-
-      const toggleBtn = await waitFor(() => {
-        const btn = screen.getByLabelText('Toggle recent files');
-        expect(btn).toBeInTheDocument();
-        return btn;
-      });
-
-      // Expand the recent section
-      await act(async () => {
-        fireEvent.click(toggleBtn);
-      });
-
-      await waitFor(() => {
-        expect(toggleBtn).toHaveAttribute('aria-expanded', 'true');
-      });
-
-      expect(screen.getByText('No recent files')).toBeInTheDocument();
-    });
-  });
-
-  // Google Drive section was extracted to an extension and is no longer
-  // part of the core LeftSidebar component.
-
-  describe('File Tree Section', () => {
-    it('renders file tree header', async () => {
-      render(<LeftSidebar {...mockProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('fileTree')).toBeInTheDocument();
-      });
     });
   });
 
@@ -393,7 +295,7 @@ describe('LeftSidebar', () => {
       const { container } = render(<LeftSidebar {...mockProps} />);
 
       const sidebar = container.firstChild as HTMLElement;
-      expect(sidebar.style.width).toBe('256px');
+      expect(sidebar.style.width).toBe('200px');
     });
 
     it('applies custom width when width prop provided', () => {
@@ -417,7 +319,6 @@ describe('LeftSidebar', () => {
 
       expect(() => render(<LeftSidebar {...mockProps} />)).not.toThrow();
 
-      // Should still render with fallback directories
       await waitFor(() => {
         expect(screen.getByText('home')).toBeInTheDocument();
       });

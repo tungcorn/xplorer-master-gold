@@ -14,104 +14,93 @@ body {
 }
 
 :root {
-  /* Clean dark theme defaults */
-  --background: #1a1a2e;
-  --foreground: rgba(255, 255, 255, 0.92);
+  /* File Pilot dark theme defaults */
+  --background: #1d1f21;
+  --foreground: #e7e7e7;
   --muted: rgba(255, 255, 255, 0.06);
-  --muted-foreground: rgba(255, 255, 255, 0.6);
-  --popover: #22223a;
-  --popover-foreground: rgba(255, 255, 255, 0.92);
+  --muted-foreground: #a7aaad;
+  --popover: #232628;
+  --popover-foreground: #e7e7e7;
   --card: rgba(255, 255, 255, 0.06);
-  --card-foreground: rgba(255, 255, 255, 0.92);
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.1);
-  --primary: #6366f1;
+  --card-foreground: #e7e7e7;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.08);
+  --primary: #14a8df;
   --primary-foreground: #ffffff;
   --secondary: rgba(255, 255, 255, 0.06);
-  --secondary-foreground: rgba(255, 255, 255, 0.92);
+  --secondary-foreground: #e7e7e7;
   --accent: rgba(255, 255, 255, 0.06);
-  --accent-foreground: rgba(255, 255, 255, 0.92);
+  --accent-foreground: #e7e7e7;
   --destructive: #f87171;
   --destructive-foreground: #ffffff;
-  --ring: #6366f1;
+  --ring: #14a8df;
   --radius: 0.5rem;
 
-  /* Solid dark — no gradient, clean surfaces */
-  --xp-bg: #1a1a2e;
+  /* File Pilot charcoal+cyan palette */
+  --xp-bg: #1d1f21;
   --xp-bg-gradient: none;
-  --xp-surface: #1e1e32;
-  --xp-surface-light: #252542;
-  --xp-blue: #6366f1;
-  --xp-blue-dark: #4f46e5;
-  --xp-purple: #a78bfa;
-  --xp-pink: #f472b6;
+  --xp-surface: #202325;
+  --xp-surface-light: #2a2d30;
+  --xp-blue: #14a8df;
+  --xp-blue-dark: #0f8fc2;
+  --xp-purple: #14a8df;
+  --xp-pink: #14a8df;
   --xp-green: #34d399;
   --xp-orange: #fb923c;
   --xp-yellow: #fbbf24;
   --xp-red: #f87171;
-  --xp-cyan: #22d3ee;
-  --xp-text: rgba(255, 255, 255, 0.92);
-  --xp-text-secondary: rgba(255, 255, 255, 0.6);
-  --xp-text-muted: rgba(255, 255, 255, 0.4);
-  --xp-border: rgba(255, 255, 255, 0.1);
+  --xp-cyan: #14a8df;
+  --xp-text: #e7e7e7;
+  --xp-text-secondary: #a7aaad;
+  --xp-text-muted: #84888c;
+  --xp-border: rgba(255, 255, 255, 0.08);
   --xp-border-light: rgba(255, 255, 255, 0.12);
 
   /* Opaque popover/dropdown bg */
-  --xp-popover: #1a1b2e;
-
-  /* Glow Effects */
-  --glow-blue: 0 0 8px rgba(99, 102, 241, 0.3);
-  --glow-purple: 0 0 8px rgba(167, 139, 250, 0.3);
-  --glow-pink: 0 0 8px rgba(244, 114, 182, 0.3);
-  --glow-green: 0 0 8px rgba(52, 211, 153, 0.3);
+  --xp-popover: #232628;
 }
 
 /* Theme Classes */
 .theme-glass {
-  --background: #1a1a2e;
-  --foreground: rgba(255, 255, 255, 0.92);
+  --background: #1d1f21;
+  --foreground: #e7e7e7;
   --muted: rgba(255, 255, 255, 0.06);
-  --muted-foreground: rgba(255, 255, 255, 0.6);
-  --popover: #22223a;
-  --popover-foreground: rgba(255, 255, 255, 0.92);
+  --muted-foreground: #a7aaad;
+  --popover: #232628;
+  --popover-foreground: #e7e7e7;
   --card: rgba(255, 255, 255, 0.06);
-  --card-foreground: rgba(255, 255, 255, 0.92);
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.1);
-  --primary: #6366f1;
+  --card-foreground: #e7e7e7;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.08);
+  --primary: #14a8df;
   --primary-foreground: #ffffff;
   --secondary: rgba(255, 255, 255, 0.06);
-  --secondary-foreground: rgba(255, 255, 255, 0.92);
+  --secondary-foreground: #e7e7e7;
   --accent: rgba(255, 255, 255, 0.06);
-  --accent-foreground: rgba(255, 255, 255, 0.92);
+  --accent-foreground: #e7e7e7;
   --destructive: #f87171;
   --destructive-foreground: #ffffff;
-  --ring: #6366f1;
+  --ring: #14a8df;
 
-  --xp-bg: #1a1a2e;
+  --xp-bg: #1d1f21;
   --xp-bg-gradient: none;
-  --xp-surface: #1e1e32;
-  --xp-surface-light: #252542;
-  --xp-blue: #6366f1;
-  --xp-blue-dark: #4f46e5;
-  --xp-purple: #a78bfa;
-  --xp-pink: #f472b6;
+  --xp-surface: #202325;
+  --xp-surface-light: #2a2d30;
+  --xp-blue: #14a8df;
+  --xp-blue-dark: #0f8fc2;
+  --xp-purple: #14a8df;
+  --xp-pink: #14a8df;
   --xp-green: #34d399;
   --xp-orange: #fb923c;
   --xp-yellow: #fbbf24;
   --xp-red: #f87171;
-  --xp-cyan: #22d3ee;
-  --xp-text: rgba(255, 255, 255, 0.92);
-  --xp-text-secondary: rgba(255, 255, 255, 0.6);
-  --xp-text-muted: rgba(255, 255, 255, 0.4);
-  --xp-border: rgba(255, 255, 255, 0.1);
+  --xp-cyan: #14a8df;
+  --xp-text: #e7e7e7;
+  --xp-text-secondary: #a7aaad;
+  --xp-text-muted: #84888c;
+  --xp-border: rgba(255, 255, 255, 0.08);
   --xp-border-light: rgba(255, 255, 255, 0.12);
-  --xp-popover: #1a1b2e;
-
-  --glow-blue: 0 0 8px rgba(99, 102, 241, 0.3);
-  --glow-purple: 0 0 8px rgba(167, 139, 250, 0.3);
-  --glow-pink: 0 0 8px rgba(244, 114, 182, 0.3);
-  --glow-green: 0 0 8px rgba(52, 211, 153, 0.3);
+  --xp-popover: #232628;
 }
 
 /* Additional themes available via marketplace extensions:
@@ -300,29 +289,29 @@ html.enhanced-focus *:focus-visible {
 
 /* Gradient background on the html element itself (Windows/Linux fallback) */
 html.theme-glass {
-  background: #1a1a2e;
+  background: #1d1f21;
   min-height: 100vh;
 }
 
 .theme-glass body {
-  background: #1a1a2e !important;
+  background: #1d1f21 !important;
 }
 
 /* ── Surface panels ──────────────────────────────────────────── */
 .theme-glass .bg-xp-surface {
-  background-color: #111122;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background-color: #202325;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .theme-glass .bg-xp-surface-light {
-  background-color: #161630;
+  background-color: #2a2d30;
 }
 
 /* Input fields */
 .theme-glass input,
 .theme-glass select,
 .theme-glass textarea {
-  background-color: rgba(0, 0, 0, 0.3) !important;
+  background-color: #25282b !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -331,21 +320,21 @@ html.theme-glass {
   background-color: rgba(255, 255, 255, 0.06);
 }
 .theme-glass .file-item.selected {
-  background-color: rgba(167, 139, 250, 0.2);
-  border: 1px solid rgba(167, 139, 250, 0.4);
+  background-color: #119ed4;
+  border: 1px solid #119ed4;
 }
 .theme-glass .sidebar-item:hover {
   background-color: rgba(255, 255, 255, 0.06);
 }
 .theme-glass .sidebar-item.active {
-  background-color: rgba(99, 102, 241, 0.2);
+  background-color: rgba(255, 255, 255, 0.04);
 }
 .theme-glass .extension-card:hover {
-  border-color: rgba(99, 102, 241, 0.3);
+  border-color: rgba(20, 168, 223, 0.3);
 }
 .theme-glass .tab-item.active {
-  background-color: rgba(99, 102, 241, 0.12);
-  border-bottom-color: #6366f1;
+  background-color: #1d1f21;
+  border-bottom-color: transparent;
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────── */
@@ -368,7 +357,7 @@ html.theme-glass {
 /* ── Nested panels ────────────────────────────────────────────── */
 .theme-glass .bg-xp-surface .bg-xp-bg,
 .theme-glass .bg-xp-bg .bg-xp-bg {
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: #1a1c1e;
 }
 
 .dark {
@@ -431,21 +420,20 @@ html.theme-glass {
     border-color: var(--xp-border);
   }
 
-  /* Neon Glow Effects */
   .glow-blue {
-    box-shadow: var(--glow-blue);
+    box-shadow: none;
   }
 
   .glow-purple {
-    box-shadow: var(--glow-purple);
+    box-shadow: none;
   }
 
   .glow-pink {
-    box-shadow: var(--glow-pink);
+    box-shadow: none;
   }
 
   .glow-green {
-    box-shadow: var(--glow-green);
+    box-shadow: none;
   }
 
   /* File Icons */
@@ -634,8 +622,8 @@ html.theme-glass {
 }
 
 .file-item.selected {
-  background-color: rgba(167, 139, 250, 0.2);
-  border: 1px solid rgba(167, 139, 250, 0.4);
+  background-color: #119ed4;
+  border: 1px solid #119ed4;
   color: white;
 }
 
@@ -671,7 +659,6 @@ html.theme-glass {
 
 .extension-card:hover {
   border-color: var(--xp-blue);
-  box-shadow: var(--glow-blue);
 }
 
 .chat-message {
@@ -817,11 +804,9 @@ html.theme-glass {
 .xp-drop-folder-highlight {
   outline: 2px solid var(--xp-blue) !important;
   outline-offset: -2px;
-  background-color: rgba(99, 102, 241, 0.12) !important;
+  background-color: rgba(20, 168, 223, 0.12) !important;
   border-radius: 6px;
-  box-shadow:
-    0 0 12px rgba(99, 102, 241, 0.3),
-    inset 0 0 8px rgba(99, 102, 241, 0.08);
+  box-shadow: 0 0 12px rgba(20, 168, 223, 0.3);
 }
 
 /* Drag overlay badge (positioned via inline styles, this adds the animation) */
