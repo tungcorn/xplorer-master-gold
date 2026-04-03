@@ -4,6 +4,7 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use xplorer_core::types::FileEntry;
 
+use crate::icons;
 use crate::state::{AppState, NewItemMode, SortColumn};
 use crate::theme;
 use crate::ui::context_menu::{self, EmptyAreaAction, FileContextAction};
@@ -60,14 +61,17 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
             let mut rename_commit: Option<(String, String)> = None;
             let mut any_row_hovered = false;
 
-            let row_height = 28.0;
+            let text_height = ui.text_style_height(&egui::TextStyle::Body);
+            let row_height = (text_height + 16.0).max(32.0);
+
             let empty_area_resp = ui.interact(
                 ui.available_rect_before_wrap(),
                 egui::Id::new("file_list_empty_bg"),
                 egui::Sense::hover(),
             );
+
             let table = TableBuilder::new(ui)
-                .striped(true)
+                .striped(false)
                 .resizable(true)
                 .sense(egui::Sense::click())
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
@@ -79,48 +83,44 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
             table
                 .header(row_height, |mut header| {
                     header.col(|ui| {
-                        if ui
-                            .selectable_label(
-                                false,
-                                sort_header("Name", SortColumn::Name, sort_col, sort_asc),
-                            )
-                            .clicked()
-                        {
-                            sort_clicked = Some(SortColumn::Name);
-                        }
+                        show_sort_header(
+                            ui,
+                            "Name",
+                            SortColumn::Name,
+                            sort_col,
+                            sort_asc,
+                            &mut sort_clicked,
+                        );
                     });
                     header.col(|ui| {
-                        if ui
-                            .selectable_label(
-                                false,
-                                sort_header("Size", SortColumn::Size, sort_col, sort_asc),
-                            )
-                            .clicked()
-                        {
-                            sort_clicked = Some(SortColumn::Size);
-                        }
+                        show_sort_header(
+                            ui,
+                            "Size",
+                            SortColumn::Size,
+                            sort_col,
+                            sort_asc,
+                            &mut sort_clicked,
+                        );
                     });
                     header.col(|ui| {
-                        if ui
-                            .selectable_label(
-                                false,
-                                sort_header("Type", SortColumn::Type, sort_col, sort_asc),
-                            )
-                            .clicked()
-                        {
-                            sort_clicked = Some(SortColumn::Type);
-                        }
+                        show_sort_header(
+                            ui,
+                            "Type",
+                            SortColumn::Type,
+                            sort_col,
+                            sort_asc,
+                            &mut sort_clicked,
+                        );
                     });
                     header.col(|ui| {
-                        if ui
-                            .selectable_label(
-                                false,
-                                sort_header("Modified", SortColumn::Modified, sort_col, sort_asc),
-                            )
-                            .clicked()
-                        {
-                            sort_clicked = Some(SortColumn::Modified);
-                        }
+                        show_sort_header(
+                            ui,
+                            "Modified",
+                            SortColumn::Modified,
+                            sort_col,
+                            sort_asc,
+                            &mut sort_clicked,
+                        );
                     });
                 })
                 .body(|body| {
@@ -149,28 +149,64 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
                                     }
                                 }
                             } else {
-                                let prefix = if entry.is_dir { "📁" } else { "  " };
-                                let display_name = truncate_name(&entry.name, 60);
-                                ui.add(
-                                    egui::Label::new(format!("{} {}", prefix, display_name))
-                                        .selectable(false),
-                                );
+                                let ext = Path::new(&entry.name)
+                                    .extension()
+                                    .map(|e| e.to_string_lossy().to_string())
+                                    .unwrap_or_default();
+                                let (icon, icon_color) = icons::file_icon(&ext, entry.is_dir);
+
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 6.0;
+                                    ui.label(
+                                        egui::RichText::new(icon).color(icon_color).size(16.0),
+                                    );
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(&entry.name).color(theme::TEXT),
+                                        )
+                                        .selectable(false)
+                                        .truncate(),
+                                    );
+                                });
                             }
                         });
+
                         let (_, size_resp) = row.col(|ui| {
-                            if entry.is_dir {
-                                ui.add(egui::Label::new("--").selectable(false));
-                            } else {
-                                ui.add(egui::Label::new(format_size(entry.size)).selectable(false));
-                            }
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let size_text = if entry.is_dir {
+                                        "—".to_string()
+                                    } else {
+                                        format_size(entry.size)
+                                    };
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(size_text).color(theme::SECONDARY),
+                                        )
+                                        .selectable(false),
+                                    );
+                                },
+                            );
                         });
+
                         let (_, type_resp) = row.col(|ui| {
-                            ui.add(egui::Label::new(&entry.file_type).selectable(false));
+                            let type_label = human_file_type(&entry.file_type, entry.is_dir);
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(type_label).color(theme::SECONDARY),
+                                )
+                                .selectable(false),
+                            );
                         });
+
                         let (_, mod_resp) = row.col(|ui| {
                             ui.add(
-                                egui::Label::new(format_timestamp(entry.modified))
-                                    .selectable(false),
+                                egui::Label::new(
+                                    egui::RichText::new(format_timestamp(entry.modified))
+                                        .color(theme::SECONDARY),
+                                )
+                                .selectable(false),
                             );
                         });
 
@@ -241,6 +277,41 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
         });
 }
 
+fn show_sort_header(
+    ui: &mut egui::Ui,
+    name: &str,
+    col: SortColumn,
+    current: SortColumn,
+    ascending: bool,
+    sort_clicked: &mut Option<SortColumn>,
+) {
+    let is_active = col == current;
+    let text_color = if is_active {
+        theme::TEXT
+    } else {
+        theme::SECONDARY
+    };
+
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        let label = egui::RichText::new(name)
+            .color(text_color)
+            .size(13.0)
+            .strong();
+        if ui.selectable_label(false, label).clicked() {
+            *sort_clicked = Some(col);
+        }
+        if is_active {
+            let arrow = if ascending { "▲" } else { "▼" };
+            ui.label(
+                egui::RichText::new(arrow)
+                    .color(theme::SELECTION)
+                    .size(10.0),
+            );
+        }
+    });
+}
+
 struct SelectionAction {
     index: usize,
     ctrl: bool,
@@ -275,14 +346,6 @@ fn apply_selection(state: &mut AppState, action: SelectionAction) {
     }
 }
 
-fn sort_header(name: &str, col: SortColumn, current: SortColumn, ascending: bool) -> String {
-    if col == current {
-        format!("{} {}", name, if ascending { "▲" } else { "▼" })
-    } else {
-        name.to_string()
-    }
-}
-
 fn format_size(bytes: u64) -> String {
     if bytes < 1024 {
         return format!("{} B", bytes);
@@ -298,8 +361,94 @@ fn format_size(bytes: u64) -> String {
 
 fn format_timestamp(ts: i64) -> String {
     chrono::DateTime::from_timestamp(ts, 0)
-        .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
-        .unwrap_or_else(|| "--".to_string())
+        .map(|dt| {
+            let local = dt.with_timezone(&chrono::Local);
+            let now = chrono::Local::now();
+            let today = now.date_naive();
+            let file_date = local.date_naive();
+            let days_ago = today.signed_duration_since(file_date).num_days();
+
+            if days_ago == 0 {
+                format!("Today, {}", local.format("%-I:%M %p"))
+            } else if days_ago == 1 {
+                format!("Yesterday, {}", local.format("%-I:%M %p"))
+            } else if days_ago < 7 {
+                local.format("%A, %-I:%M %p").to_string()
+            } else {
+                local.format("%b %-d, %Y").to_string()
+            }
+        })
+        .unwrap_or_else(|| "—".to_string())
+}
+
+fn human_file_type(raw_type: &str, is_dir: bool) -> String {
+    if is_dir {
+        return "Folder".to_string();
+    }
+    let ext = raw_type.trim_start_matches('.').to_lowercase();
+    match ext.as_str() {
+        "rs" => "Rust Source".to_string(),
+        "toml" => "TOML Config".to_string(),
+        "js" | "mjs" => "JavaScript".to_string(),
+        "jsx" => "React JSX".to_string(),
+        "ts" => "TypeScript".to_string(),
+        "tsx" => "React TSX".to_string(),
+        "py" => "Python".to_string(),
+        "go" => "Go Source".to_string(),
+        "c" => "C Source".to_string(),
+        "h" => "C Header".to_string(),
+        "cpp" | "cc" => "C++ Source".to_string(),
+        "hpp" => "C++ Header".to_string(),
+        "java" => "Java Source".to_string(),
+        "rb" => "Ruby".to_string(),
+        "cs" => "C# Source".to_string(),
+        "swift" => "Swift".to_string(),
+        "html" | "htm" => "HTML".to_string(),
+        "css" => "CSS".to_string(),
+        "scss" | "sass" => "SCSS".to_string(),
+        "json" => "JSON".to_string(),
+        "yaml" | "yml" => "YAML".to_string(),
+        "xml" => "XML".to_string(),
+        "md" => "Markdown".to_string(),
+        "txt" => "Text".to_string(),
+        "log" => "Log File".to_string(),
+        "png" => "PNG Image".to_string(),
+        "jpg" | "jpeg" => "JPEG Image".to_string(),
+        "gif" => "GIF Image".to_string(),
+        "svg" => "SVG Image".to_string(),
+        "webp" => "WebP Image".to_string(),
+        "bmp" => "Bitmap".to_string(),
+        "ico" => "Icon".to_string(),
+        "pdf" => "PDF Document".to_string(),
+        "doc" | "docx" => "Word Document".to_string(),
+        "xls" | "xlsx" => "Excel Sheet".to_string(),
+        "ppt" | "pptx" => "PowerPoint".to_string(),
+        "csv" => "CSV Data".to_string(),
+        "zip" => "ZIP Archive".to_string(),
+        "rar" => "RAR Archive".to_string(),
+        "7z" => "7z Archive".to_string(),
+        "tar" => "TAR Archive".to_string(),
+        "gz" => "GZip Archive".to_string(),
+        "mp3" => "MP3 Audio".to_string(),
+        "wav" => "WAV Audio".to_string(),
+        "flac" => "FLAC Audio".to_string(),
+        "mp4" => "MP4 Video".to_string(),
+        "mkv" => "MKV Video".to_string(),
+        "avi" => "AVI Video".to_string(),
+        "mov" => "MOV Video".to_string(),
+        "exe" => "Executable".to_string(),
+        "msi" => "Installer".to_string(),
+        "dll" => "DLL Library".to_string(),
+        "bat" | "cmd" => "Batch Script".to_string(),
+        "ps1" => "PowerShell".to_string(),
+        "sh" | "bash" => "Shell Script".to_string(),
+        "ini" | "cfg" | "conf" => "Config".to_string(),
+        "env" => "Environment".to_string(),
+        "lock" => "Lock File".to_string(),
+        "gitignore" => "Git Ignore".to_string(),
+        "" => "File".to_string(),
+        other => format!("{} File", other.to_uppercase()),
+    }
 }
 
 fn handle_file_context_action(
@@ -431,17 +580,4 @@ fn show_new_item_input(ui: &mut egui::Ui, state: &mut AppState, mode: &NewItemMo
         }
     });
     ui.add_space(4.0);
-}
-
-fn truncate_name(name: &str, max_len: usize) -> String {
-    if name.len() > max_len {
-        let end = name
-            .char_indices()
-            .nth(max_len.saturating_sub(3))
-            .map(|(i, _)| i)
-            .unwrap_or(name.len());
-        format!("{}...", &name[..end])
-    } else {
-        name.to_string()
-    }
 }

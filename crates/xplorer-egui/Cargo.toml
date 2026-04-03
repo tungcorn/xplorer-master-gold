@@ -7,6 +7,7 @@ edition = "2021"
 xplorer-core = { path = "../xplorer-core" }
 eframe = { version = "0.31", default-features = true }
 egui_extras = { version = "0.31", features = ["all_loaders"] }
+egui-phosphor = { version = "0.9", default-features = true }
 rfd = "0.15"
 egui-notify = "0.19"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
