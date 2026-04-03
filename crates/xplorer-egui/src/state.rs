@@ -2,6 +2,8 @@ use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 use xplorer_core::types::{Bookmark, DriveInfo, FileEntry};
 
+use crate::watcher::WatchCommand;
+
 pub struct AppState {
     pub tabs: Vec<Tab>,
     pub active_tab: usize,
@@ -9,6 +11,7 @@ pub struct AppState {
     pub resp_receiver: std::sync::mpsc::Receiver<DirResponse>,
     pub file_op_sender: std::sync::mpsc::Sender<FileOpRequest>,
     pub file_op_receiver: std::sync::mpsc::Receiver<FileOpResponse>,
+    pub watcher_sender: Option<std::sync::mpsc::Sender<WatchCommand>>,
     pub sidebar_width: f32,
     pub show_sidebar: bool,
     pub drives: Vec<DriveInfo>,
@@ -40,6 +43,7 @@ impl AppState {
             resp_receiver,
             file_op_sender,
             file_op_receiver,
+            watcher_sender: None,
             sidebar_width: 200.0,
             show_sidebar: true,
             drives: Vec::new(),
@@ -97,6 +101,7 @@ impl AppState {
         tab.navigate(path.to_string());
         let tab_id = tab.id;
         self.request_load(tab_id, path.to_string());
+        self.update_watcher();
     }
 
     pub fn go_back_nav(&mut self) {
@@ -135,6 +140,7 @@ impl AppState {
     pub fn switch_tab(&mut self, index: usize) {
         if index < self.tabs.len() {
             self.active_tab = index;
+            self.update_watcher();
         }
     }
 
@@ -258,13 +264,23 @@ impl AppState {
         self.new_item_name = "New File.txt".to_string();
     }
 
-    fn selected_paths(&self) -> Vec<String> {
+    pub fn selected_paths(&self) -> Vec<String> {
         let tab = self.active_tab();
         tab.selected_indices
             .iter()
             .filter_map(|&i| tab.entries.get(i))
             .map(|e| e.path.clone())
             .collect()
+    }
+
+    pub fn update_watcher(&self) {
+        if let Some(ref sender) = self.watcher_sender {
+            let tab = self.active_tab();
+            let _ = sender.send(WatchCommand::Watch {
+                tab_id: tab.id,
+                path: tab.path.clone(),
+            });
+        }
     }
 }
 

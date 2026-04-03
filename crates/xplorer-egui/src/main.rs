@@ -1,6 +1,7 @@
 mod state;
 mod theme;
 mod ui;
+mod watcher;
 mod worker;
 
 use eframe::egui;
@@ -10,6 +11,11 @@ use ui::sidebar::SidebarAction;
 
 struct XplorerApp {
     state: AppState,
+    confirm_delete: Option<ConfirmDelete>,
+}
+
+struct ConfirmDelete {
+    paths: Vec<String>,
 }
 
 impl XplorerApp {
@@ -43,7 +49,14 @@ impl XplorerApp {
 
         state.request_load(0, home_str);
 
-        Self { state }
+        let watcher_sender = watcher::spawn_watcher(state.req_sender.clone(), cc.egui_ctx.clone());
+        state.watcher_sender = Some(watcher_sender);
+        state.update_watcher();
+
+        Self {
+            state,
+            confirm_delete: None,
+        }
     }
 
     fn active_tab_snapshot(&self) -> Option<(usize, String)> {
@@ -120,7 +133,10 @@ impl XplorerApp {
                 self.state.do_delete(true);
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Delete) && i.modifiers.shift) {
-                self.state.do_delete(false);
+                let paths = self.state.selected_paths();
+                if !paths.is_empty() {
+                    self.confirm_delete = Some(ConfirmDelete { paths });
+                }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::F2)) {
                 if let Some((idx, name)) = self.active_tab_snapshot() {
@@ -172,6 +188,10 @@ impl eframe::App for XplorerApp {
         self.state.process_file_op_responses();
         self.process_keyboard_shortcuts(ctx);
 
+        let tab = &self.state.tabs[self.state.active_tab];
+        let title = format!("{} — Xplorer", tab.display_name);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
+
         let sidebar_action = ui::sidebar::show(ctx, &mut self.state);
         match sidebar_action {
             SidebarAction::Navigate(path) => self.state.navigate_to(&path),
@@ -185,6 +205,47 @@ impl eframe::App for XplorerApp {
         ui::status_bar::show(ctx, &self.state);
         ui::file_list::show(ctx, &mut self.state);
         self.state.toasts.show(ctx);
+
+        let mut dismiss_dialog = false;
+        let mut do_permanent_delete = false;
+        if let Some(ref dialog) = self.confirm_delete {
+            let count = dialog.paths.len();
+            egui::Window::new("Confirm Delete")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(format!(
+                        "Permanently delete {} item(s)? This cannot be undone.",
+                        count
+                    ));
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Cancel").clicked() {
+                            dismiss_dialog = true;
+                        }
+                        if ui
+                            .button(egui::RichText::new("Delete").color(theme::WARNING))
+                            .clicked()
+                        {
+                            do_permanent_delete = true;
+                        }
+                    });
+                });
+        }
+        if do_permanent_delete {
+            if let Some(dialog) = self.confirm_delete.take() {
+                let _ = self
+                    .state
+                    .file_op_sender
+                    .send(state::FileOpRequest::Delete {
+                        paths: dialog.paths,
+                        to_trash: false,
+                    });
+            }
+        } else if dismiss_dialog || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.confirm_delete = None;
+        }
     }
 }
 

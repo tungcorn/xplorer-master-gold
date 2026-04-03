@@ -141,7 +141,8 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
                                 }
                             } else {
                                 let prefix = if entry.is_dir { "📁" } else { "  " };
-                                let label = format!("{} {}", prefix, entry.name);
+                                let display_name = truncate_name(&entry.name, 60);
+                                let label = format!("{} {}", prefix, display_name);
                                 let response = ui.selectable_label(is_selected, label);
 
                                 let ctx = context_menu::file_context_menu(
@@ -412,4 +413,17 @@ fn show_new_item_input(ui: &mut egui::Ui, state: &mut AppState, mode: &NewItemMo
         }
     });
     ui.add_space(4.0);
+}
+
+fn truncate_name(name: &str, max_len: usize) -> String {
+    if name.len() > max_len {
+        let end = name
+            .char_indices()
+            .nth(max_len.saturating_sub(3))
+            .map(|(i, _)| i)
+            .unwrap_or(name.len());
+        format!("{}...", &name[..end])
+    } else {
+        name.to_string()
+    }
 }
