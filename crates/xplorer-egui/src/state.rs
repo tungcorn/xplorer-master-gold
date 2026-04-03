@@ -157,12 +157,33 @@ impl AppState {
                         tab.loading = false;
                         match entries {
                             Ok(e) => {
+                                let is_refresh = tab.path == path;
+                                let saved_paths: Vec<String> = if is_refresh {
+                                    tab.selected_indices
+                                        .iter()
+                                        .filter_map(|&i| tab.entries.get(i))
+                                        .map(|entry| entry.path.clone())
+                                        .collect()
+                                } else {
+                                    Vec::new()
+                                };
+
                                 tab.path = path;
                                 tab.display_name = display_name_for_path(&tab.path);
                                 tab.entries = e;
                                 tab.error = None;
                                 tab.selected_indices.clear();
                                 tab.sort_entries();
+
+                                if !saved_paths.is_empty() {
+                                    tab.selected_indices = tab
+                                        .entries
+                                        .iter()
+                                        .enumerate()
+                                        .filter(|(_, entry)| saved_paths.contains(&entry.path))
+                                        .map(|(i, _)| i)
+                                        .collect();
+                                }
                             }
                             Err(e) => {
                                 tab.error = Some(e);

@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use eframe::egui;
 use notify::RecursiveMode;
@@ -29,6 +29,8 @@ pub fn spawn_watcher(
 
         let mut current_path: Option<String> = None;
         let mut current_tab_id: Option<usize> = None;
+        let mut last_reload = Instant::now();
+        let cooldown = Duration::from_secs(2);
 
         loop {
             if let Ok(cmd) = cmd_rx.try_recv() {
@@ -40,18 +42,22 @@ pub fn spawn_watcher(
                         let _ = debouncer.watch(Path::new(&path), RecursiveMode::NonRecursive);
                         current_path = Some(path);
                         current_tab_id = Some(tab_id);
+                        last_reload = Instant::now();
                     }
                     WatchCommand::Stop => break,
                 }
             }
 
-            if let Ok(Ok(_events)) = rx.try_recv() {
-                if let (Some(tab_id), Some(ref path)) = (current_tab_id, &current_path) {
-                    let _ = dir_sender.send(DirRequest::LoadDirectory {
-                        tab_id,
-                        path: path.clone(),
-                    });
-                    ctx.request_repaint();
+            while let Ok(Ok(_events)) = rx.try_recv() {
+                if last_reload.elapsed() >= cooldown {
+                    if let (Some(tab_id), Some(ref path)) = (current_tab_id, &current_path) {
+                        let _ = dir_sender.send(DirRequest::LoadDirectory {
+                            tab_id,
+                            path: path.clone(),
+                        });
+                        ctx.request_repaint();
+                        last_reload = Instant::now();
+                    }
                 }
             }
 

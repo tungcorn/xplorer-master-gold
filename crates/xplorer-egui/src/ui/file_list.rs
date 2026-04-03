@@ -9,7 +9,7 @@ use crate::theme;
 use crate::ui::context_menu::{self, EmptyAreaAction, FileContextAction};
 
 pub fn show(ctx: &egui::Context, state: &mut AppState) {
-    let panel_response = egui::CentralPanel::default()
+    egui::CentralPanel::default()
         .frame(egui::Frame::central_panel(&ctx.style()).fill(theme::BACKGROUND))
         .show(ctx, |ui| {
             if let Some(mode) = state.new_item_mode.clone() {
@@ -58,11 +58,18 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
             let mut double_click_action: Option<DoubleClickAction> = None;
             let mut file_ctx_action: Option<(FileContextAction, String, bool)> = None;
             let mut rename_commit: Option<(String, String)> = None;
+            let mut any_row_hovered = false;
 
             let row_height = 28.0;
+            let empty_area_resp = ui.interact(
+                ui.available_rect_before_wrap(),
+                egui::Id::new("file_list_empty_bg"),
+                egui::Sense::hover(),
+            );
             let table = TableBuilder::new(ui)
                 .striped(true)
                 .resizable(true)
+                .sense(egui::Sense::click())
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                 .column(Column::initial(300.0).at_least(150.0))
                 .column(Column::initial(80.0).at_least(50.0))
@@ -122,7 +129,9 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
                         let (original_idx, entry) = &filtered[idx];
                         let is_selected = selected.contains(original_idx);
 
-                        row.col(|ui| {
+                        row.set_selected(is_selected);
+
+                        let (_, name_resp) = row.col(|ui| {
                             if rename_idx == Some(*original_idx) {
                                 if let Some(ref mut rs) = state.rename_state {
                                     let response = ui.text_edit_singleline(&mut rs.new_name);
@@ -142,50 +151,59 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
                             } else {
                                 let prefix = if entry.is_dir { "📁" } else { "  " };
                                 let display_name = truncate_name(&entry.name, 60);
-                                let label = format!("{} {}", prefix, display_name);
-                                let response = ui.selectable_label(is_selected, label);
-
-                                let ctx = context_menu::file_context_menu(
-                                    &response,
-                                    entry.is_dir,
-                                    has_clipboard,
+                                ui.add(
+                                    egui::Label::new(format!("{} {}", prefix, display_name))
+                                        .selectable(false),
                                 );
-                                if !matches!(ctx, FileContextAction::None) {
-                                    file_ctx_action = Some((ctx, entry.path.clone(), entry.is_dir));
-                                }
-
-                                if response.double_clicked() {
-                                    if entry.is_dir {
-                                        double_click_action = Some(DoubleClickAction::NavigateDir(
-                                            entry.path.clone(),
-                                        ));
-                                    } else {
-                                        double_click_action =
-                                            Some(DoubleClickAction::OpenFile(entry.path.clone()));
-                                    }
-                                } else if response.clicked() {
-                                    let modifiers = ui.input(|i| i.modifiers);
-                                    selection_action = Some(SelectionAction {
-                                        index: *original_idx,
-                                        ctrl: modifiers.ctrl || modifiers.mac_cmd,
-                                        shift: modifiers.shift,
-                                    });
-                                }
                             }
                         });
-                        row.col(|ui| {
+                        let (_, size_resp) = row.col(|ui| {
                             if entry.is_dir {
-                                ui.label("--");
+                                ui.add(egui::Label::new("--").selectable(false));
                             } else {
-                                ui.label(format_size(entry.size));
+                                ui.add(egui::Label::new(format_size(entry.size)).selectable(false));
                             }
                         });
-                        row.col(|ui| {
-                            ui.label(&entry.file_type);
+                        let (_, type_resp) = row.col(|ui| {
+                            ui.add(egui::Label::new(&entry.file_type).selectable(false));
                         });
-                        row.col(|ui| {
-                            ui.label(format_timestamp(entry.modified));
+                        let (_, mod_resp) = row.col(|ui| {
+                            ui.add(
+                                egui::Label::new(format_timestamp(entry.modified))
+                                    .selectable(false),
+                            );
                         });
+
+                        let combined = name_resp | size_resp | type_resp | mod_resp;
+                        let interact = combined | row.response();
+                        if interact.hovered() {
+                            any_row_hovered = true;
+                        }
+
+                        let ctx_action =
+                            context_menu::file_context_menu(&interact, entry.is_dir, has_clipboard);
+                        if !matches!(ctx_action, FileContextAction::None) {
+                            file_ctx_action = Some((ctx_action, entry.path.clone(), entry.is_dir));
+                        }
+
+                        if rename_idx != Some(*original_idx) {
+                            if interact.double_clicked() {
+                                if entry.is_dir {
+                                    double_click_action =
+                                        Some(DoubleClickAction::NavigateDir(entry.path.clone()));
+                                } else {
+                                    double_click_action =
+                                        Some(DoubleClickAction::OpenFile(entry.path.clone()));
+                                }
+                            } else if interact.clicked() {
+                                let modifiers = interact.ctx.input(|i| i.modifiers);
+                                selection_action = Some(SelectionAction {
+                                    index: *original_idx,
+                                    ctrl: modifiers.ctrl || modifiers.mac_cmd,
+                                    shift: modifiers.shift,
+                                });
+                            }
+                        }
                     });
                 });
 
@@ -209,18 +227,18 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
 
             if let Some((action, path, is_dir)) = file_ctx_action {
                 handle_file_context_action(state, action, &path, is_dir);
+            } else if !any_row_hovered {
+                let current_path = state.active_tab().path.clone();
+                let has_clipboard = state.clipboard.is_some();
+                let empty_action =
+                    context_menu::empty_area_context_menu(&empty_area_resp, has_clipboard);
+                handle_empty_area_action(state, empty_action, &current_path);
             }
 
             if let Some((old_path, new_name)) = rename_commit {
                 state.do_rename(old_path, new_name);
             }
         });
-
-    let current_path = state.active_tab().path.clone();
-    let has_clipboard = state.clipboard.is_some();
-    let empty_action =
-        context_menu::empty_area_context_menu(&panel_response.response, has_clipboard);
-    handle_empty_area_action(state, empty_action, &current_path);
 }
 
 struct SelectionAction {

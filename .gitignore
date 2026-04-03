@@ -4,6 +4,7 @@ dist
 vite.config.ts.*
 *.tar.gz
 target
+target-build-verify
 
 # Environment and secrets
 .env
