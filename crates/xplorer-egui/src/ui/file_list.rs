@@ -4,7 +4,7 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use xplorer_core::types::FileEntry;
 
-use crate::state::{AppState, SortColumn};
+use crate::state::{AppState, NewItemMode, SortColumn};
 use crate::theme;
 use crate::ui::context_menu::{self, EmptyAreaAction, FileContextAction};
 
@@ -12,6 +12,10 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
     let panel_response = egui::CentralPanel::default()
         .frame(egui::Frame::central_panel(&ctx.style()).fill(theme::BACKGROUND))
         .show(ctx, |ui| {
+            if let Some(mode) = state.new_item_mode.clone() {
+                show_new_item_input(ui, state, &mode);
+            }
+
             let tab = &state.tabs[state.active_tab];
             if tab.loading {
                 ui.centered_and_justified(|ui| {
@@ -46,11 +50,14 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
             let sort_col = tab.sort_column;
             let sort_asc = tab.sort_ascending;
             let selected = tab.selected_indices.clone();
+            let has_clipboard = state.clipboard.is_some();
+            let rename_idx = state.rename_state.as_ref().map(|r| r.entry_index);
 
             let mut sort_clicked: Option<SortColumn> = None;
             let mut selection_action: Option<SelectionAction> = None;
             let mut double_click_action: Option<DoubleClickAction> = None;
             let mut file_ctx_action: Option<(FileContextAction, String, bool)> = None;
+            let mut rename_commit: Option<(String, String)> = None;
 
             let row_height = 28.0;
             let table = TableBuilder::new(ui)
@@ -116,31 +123,53 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
                         let is_selected = selected.contains(original_idx);
 
                         row.col(|ui| {
-                            let prefix = if entry.is_dir { "📁" } else { "  " };
-                            let label = format!("{} {}", prefix, entry.name);
-                            let response = ui.selectable_label(is_selected, label);
-
-                            let ctx =
-                                context_menu::file_context_menu(&response, entry.is_dir, false);
-                            if !matches!(ctx, FileContextAction::None) {
-                                file_ctx_action = Some((ctx, entry.path.clone(), entry.is_dir));
-                            }
-
-                            if response.double_clicked() {
-                                if entry.is_dir {
-                                    double_click_action =
-                                        Some(DoubleClickAction::NavigateDir(entry.path.clone()));
-                                } else {
-                                    double_click_action =
-                                        Some(DoubleClickAction::OpenFile(entry.path.clone()));
+                            if rename_idx == Some(*original_idx) {
+                                if let Some(ref mut rs) = state.rename_state {
+                                    let response = ui.text_edit_singleline(&mut rs.new_name);
+                                    if !response.has_focus() {
+                                        response.request_focus();
+                                    }
+                                    let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                    let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+                                    if enter {
+                                        rename_commit =
+                                            Some((entry.path.clone(), rs.new_name.clone()));
+                                    }
+                                    if enter || escape || response.lost_focus() {
+                                        state.rename_state = None;
+                                    }
                                 }
-                            } else if response.clicked() {
-                                let modifiers = ui.input(|i| i.modifiers);
-                                selection_action = Some(SelectionAction {
-                                    index: *original_idx,
-                                    ctrl: modifiers.ctrl || modifiers.mac_cmd,
-                                    shift: modifiers.shift,
-                                });
+                            } else {
+                                let prefix = if entry.is_dir { "📁" } else { "  " };
+                                let label = format!("{} {}", prefix, entry.name);
+                                let response = ui.selectable_label(is_selected, label);
+
+                                let ctx = context_menu::file_context_menu(
+                                    &response,
+                                    entry.is_dir,
+                                    has_clipboard,
+                                );
+                                if !matches!(ctx, FileContextAction::None) {
+                                    file_ctx_action = Some((ctx, entry.path.clone(), entry.is_dir));
+                                }
+
+                                if response.double_clicked() {
+                                    if entry.is_dir {
+                                        double_click_action = Some(DoubleClickAction::NavigateDir(
+                                            entry.path.clone(),
+                                        ));
+                                    } else {
+                                        double_click_action =
+                                            Some(DoubleClickAction::OpenFile(entry.path.clone()));
+                                    }
+                                } else if response.clicked() {
+                                    let modifiers = ui.input(|i| i.modifiers);
+                                    selection_action = Some(SelectionAction {
+                                        index: *original_idx,
+                                        ctrl: modifiers.ctrl || modifiers.mac_cmd,
+                                        shift: modifiers.shift,
+                                    });
+                                }
                             }
                         });
                         row.col(|ui| {
@@ -180,10 +209,16 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
             if let Some((action, path, is_dir)) = file_ctx_action {
                 handle_file_context_action(state, action, &path, is_dir);
             }
+
+            if let Some((old_path, new_name)) = rename_commit {
+                state.do_rename(old_path, new_name);
+            }
         });
 
     let current_path = state.active_tab().path.clone();
-    let empty_action = context_menu::empty_area_context_menu(&panel_response.response, false);
+    let has_clipboard = state.clipboard.is_some();
+    let empty_action =
+        context_menu::empty_area_context_menu(&panel_response.response, has_clipboard);
     handle_empty_area_action(state, empty_action, &current_path);
 }
 
@@ -295,12 +330,24 @@ fn handle_file_context_action(
                     .spawn();
             }
         }
-        FileContextAction::Copy
-        | FileContextAction::Cut
-        | FileContextAction::Paste
-        | FileContextAction::Delete
-        | FileContextAction::MoveToTrash
-        | FileContextAction::Rename => {}
+        FileContextAction::Copy => state.do_copy(),
+        FileContextAction::Cut => state.do_cut(),
+        FileContextAction::Paste => state.do_paste(),
+        FileContextAction::Delete => state.do_delete(false),
+        FileContextAction::MoveToTrash => state.do_delete(true),
+        FileContextAction::Rename => {
+            let name = Path::new(path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let tab = state.active_tab();
+            if let Some(idx) = tab.entries.iter().position(|e| e.path == path) {
+                state.rename_state = Some(crate::state::RenameState {
+                    entry_index: idx,
+                    new_name: name,
+                });
+            }
+        }
         FileContextAction::None => {}
     }
 }
@@ -327,7 +374,42 @@ fn handle_empty_area_action(state: &mut AppState, action: EmptyAreaAction, curre
                     .spawn();
             }
         }
-        EmptyAreaAction::NewFolder | EmptyAreaAction::NewFile | EmptyAreaAction::Paste => {}
+        EmptyAreaAction::NewFolder => state.do_create_folder(),
+        EmptyAreaAction::NewFile => state.do_create_file(),
+        EmptyAreaAction::Paste => state.do_paste(),
         EmptyAreaAction::None => {}
     }
+}
+
+fn show_new_item_input(ui: &mut egui::Ui, state: &mut AppState, mode: &NewItemMode) {
+    let label = match mode {
+        NewItemMode::Folder => "New folder name:",
+        NewItemMode::File => "New file name:",
+    };
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(label).color(theme::MUTED).size(12.0));
+        let response = ui.text_edit_singleline(&mut state.new_item_name);
+        if !response.has_focus() {
+            response.request_focus();
+        }
+        let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+        if enter && !state.new_item_name.trim().is_empty() {
+            let parent = state.active_tab().path.clone();
+            let full_path = format!("{}\\{}", parent, state.new_item_name.trim());
+            let request = match mode {
+                NewItemMode::Folder => {
+                    crate::state::FileOpRequest::CreateFolder { path: full_path }
+                }
+                NewItemMode::File => crate::state::FileOpRequest::CreateFile { path: full_path },
+            };
+            let _ = state.file_op_sender.send(request);
+            state.new_item_mode = None;
+            state.new_item_name.clear();
+        } else if escape {
+            state.new_item_mode = None;
+            state.new_item_name.clear();
+        }
+    });
+    ui.add_space(4.0);
 }

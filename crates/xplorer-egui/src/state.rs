@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use xplorer_core::types::{Bookmark, DriveInfo, FileEntry};
 
 pub struct AppState {
@@ -7,12 +7,19 @@ pub struct AppState {
     pub active_tab: usize,
     pub req_sender: std::sync::mpsc::Sender<DirRequest>,
     pub resp_receiver: std::sync::mpsc::Receiver<DirResponse>,
+    pub file_op_sender: std::sync::mpsc::Sender<FileOpRequest>,
+    pub file_op_receiver: std::sync::mpsc::Receiver<FileOpResponse>,
     pub sidebar_width: f32,
     pub show_sidebar: bool,
     pub drives: Vec<DriveInfo>,
     pub bookmarks: Vec<Bookmark>,
     pub editing_address_bar: bool,
     pub address_bar_text: String,
+    pub clipboard: Option<Clipboard>,
+    pub rename_state: Option<RenameState>,
+    pub new_item_mode: Option<NewItemMode>,
+    pub new_item_name: String,
+    pub toasts: egui_notify::Toasts,
     next_tab_id: usize,
 }
 
@@ -20,6 +27,8 @@ impl AppState {
     pub fn new(
         req_sender: std::sync::mpsc::Sender<DirRequest>,
         resp_receiver: std::sync::mpsc::Receiver<DirResponse>,
+        file_op_sender: std::sync::mpsc::Sender<FileOpRequest>,
+        file_op_receiver: std::sync::mpsc::Receiver<FileOpResponse>,
         initial_path: String,
     ) -> Self {
         let display = display_name_for_path(&initial_path);
@@ -28,12 +37,19 @@ impl AppState {
             active_tab: 0,
             req_sender,
             resp_receiver,
+            file_op_sender,
+            file_op_receiver,
             sidebar_width: 200.0,
             show_sidebar: true,
             drives: Vec::new(),
             bookmarks: Vec::new(),
             editing_address_bar: false,
             address_bar_text: String::new(),
+            clipboard: None,
+            rename_state: None,
+            new_item_mode: None,
+            new_item_name: String::new(),
+            toasts: egui_notify::Toasts::default().with_anchor(egui_notify::Anchor::BottomRight),
             next_tab_id: 1,
         }
     }
@@ -148,6 +164,105 @@ impl AppState {
                 }
             }
         }
+    }
+
+    pub fn process_file_op_responses(&mut self) {
+        while let Ok(resp) = self.file_op_receiver.try_recv() {
+            match resp {
+                FileOpResponse::Success { message } => {
+                    self.toasts.success(message);
+                    self.refresh_active_tab();
+                }
+                FileOpResponse::Error { message } => {
+                    self.toasts.error(message);
+                }
+            }
+        }
+    }
+
+    pub fn refresh_active_tab(&self) {
+        let tab = self.active_tab();
+        self.request_load(tab.id, tab.path.clone());
+    }
+
+    pub fn do_copy(&mut self) {
+        let paths = self.selected_paths();
+        if !paths.is_empty() {
+            self.clipboard = Some(Clipboard {
+                paths,
+                operation: ClipboardOp::Copy,
+            });
+        }
+    }
+
+    pub fn do_cut(&mut self) {
+        let paths = self.selected_paths();
+        if !paths.is_empty() {
+            self.clipboard = Some(Clipboard {
+                paths,
+                operation: ClipboardOp::Cut,
+            });
+        }
+    }
+
+    pub fn do_paste(&mut self) {
+        if let Some(clipboard) = self.clipboard.clone() {
+            let dest_dir = self.active_tab().path.clone();
+            let request = match clipboard.operation {
+                ClipboardOp::Copy => FileOpRequest::Copy {
+                    sources: clipboard.paths,
+                    dest_dir,
+                },
+                ClipboardOp::Cut => FileOpRequest::Move {
+                    sources: clipboard.paths,
+                    dest_dir,
+                },
+            };
+            let _ = self.file_op_sender.send(request);
+            if clipboard.operation == ClipboardOp::Cut {
+                self.clipboard = None;
+            }
+        }
+    }
+
+    pub fn do_delete(&mut self, to_trash: bool) {
+        let paths = self.selected_paths();
+        if !paths.is_empty() {
+            let _ = self
+                .file_op_sender
+                .send(FileOpRequest::Delete { paths, to_trash });
+        }
+    }
+
+    pub fn do_rename(&mut self, path: String, new_name: String) {
+        let parent = Path::new(&path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let new_path = format!("{}\\{}", parent, new_name);
+        let _ = self.file_op_sender.send(FileOpRequest::Rename {
+            old_path: path,
+            new_path,
+        });
+    }
+
+    pub fn do_create_folder(&mut self) {
+        self.new_item_mode = Some(NewItemMode::Folder);
+        self.new_item_name = "New Folder".to_string();
+    }
+
+    pub fn do_create_file(&mut self) {
+        self.new_item_mode = Some(NewItemMode::File);
+        self.new_item_name = "New File.txt".to_string();
+    }
+
+    fn selected_paths(&self) -> Vec<String> {
+        let tab = self.active_tab();
+        tab.selected_indices
+            .iter()
+            .filter_map(|&i| tab.entries.get(i))
+            .map(|e| e.path.clone())
+            .collect()
     }
 }
 
@@ -280,6 +395,59 @@ pub enum DirResponse {
         path: String,
         entries: Result<Vec<FileEntry>, String>,
     },
+}
+
+#[derive(Clone)]
+pub struct Clipboard {
+    pub paths: Vec<String>,
+    pub operation: ClipboardOp,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum ClipboardOp {
+    Copy,
+    Cut,
+}
+
+pub struct RenameState {
+    pub entry_index: usize,
+    pub new_name: String,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum NewItemMode {
+    Folder,
+    File,
+}
+
+pub enum FileOpRequest {
+    Copy {
+        sources: Vec<String>,
+        dest_dir: String,
+    },
+    Move {
+        sources: Vec<String>,
+        dest_dir: String,
+    },
+    Delete {
+        paths: Vec<String>,
+        to_trash: bool,
+    },
+    Rename {
+        old_path: String,
+        new_path: String,
+    },
+    CreateFolder {
+        path: String,
+    },
+    CreateFile {
+        path: String,
+    },
+}
+
+pub enum FileOpResponse {
+    Success { message: String },
+    Error { message: String },
 }
 
 fn display_name_for_path(path: &str) -> String {
