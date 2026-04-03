@@ -55,12 +55,9 @@ impl XplorerApp {
             None
         }
     }
-}
 
-impl eframe::App for XplorerApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.state.process_responses();
-        self.state.process_file_op_responses();
+    fn process_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
+        let text_focused = ctx.wants_keyboard_input();
 
         if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl) {
             self.state.new_tab();
@@ -69,33 +66,111 @@ impl eframe::App for XplorerApp {
             let idx = self.state.active_tab;
             self.state.close_tab(idx);
         }
+        if ctx.input(|i| i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl && !i.modifiers.shift) {
+            let next = (self.state.active_tab + 1) % self.state.tabs.len();
+            self.state.switch_tab(next);
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl && i.modifiers.shift) {
+            let prev = if self.state.active_tab == 0 {
+                self.state.tabs.len() - 1
+            } else {
+                self.state.active_tab - 1
+            };
+            self.state.switch_tab(prev);
+        }
+
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft) && i.modifiers.alt) {
+            self.state.go_back_nav();
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight) && i.modifiers.alt) {
+            self.state.go_forward_nav();
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) && i.modifiers.alt) {
+            self.state.go_up();
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::L) && i.modifiers.ctrl) {
+            self.state.editing_address_bar = true;
+            self.state.address_bar_text = self.state.active_tab().path.clone();
+        }
+        if !text_focused && ctx.input(|i| i.key_pressed(egui::Key::Backspace)) {
+            self.state.go_up();
+        }
+
         if ctx.input(|i| i.key_pressed(egui::Key::B) && i.modifiers.ctrl) {
             self.state.show_sidebar = !self.state.show_sidebar;
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl) {
-            self.state.do_copy();
+        if ctx.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.ctrl) {
+            self.state.focus_filter = true;
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::X) && i.modifiers.ctrl) {
-            self.state.do_cut();
+        if ctx.input(|i| i.key_pressed(egui::Key::F5)) {
+            self.state.refresh_active_tab();
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::V) && i.modifiers.ctrl) {
-            self.state.do_paste();
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::Delete) && !i.modifiers.shift) {
-            self.state.do_delete(true);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::Delete) && i.modifiers.shift) {
-            self.state.do_delete(false);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::F2)) {
-            let tab = self.active_tab_snapshot();
-            if let Some((idx, name)) = tab {
-                self.state.rename_state = Some(state::RenameState {
-                    entry_index: idx,
-                    new_name: name,
-                });
+
+        if !text_focused {
+            if ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl) {
+                self.state.do_copy();
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::X) && i.modifiers.ctrl) {
+                self.state.do_cut();
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::V) && i.modifiers.ctrl) {
+                self.state.do_paste();
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Delete) && !i.modifiers.shift) {
+                self.state.do_delete(true);
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Delete) && i.modifiers.shift) {
+                self.state.do_delete(false);
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::F2)) {
+                if let Some((idx, name)) = self.active_tab_snapshot() {
+                    self.state.rename_state = Some(state::RenameState {
+                        entry_index: idx,
+                        new_name: name,
+                    });
+                }
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                let tab = self.state.active_tab();
+                if let Some(&idx) = tab.selected_indices.first() {
+                    if let Some(entry) = tab.entries.get(idx) {
+                        let path = entry.path.clone();
+                        let is_dir = entry.is_dir;
+                        if is_dir {
+                            self.state.navigate_to(&path);
+                        } else {
+                            let _ = xplorer_core::system::open_file(std::path::Path::new(&path));
+                        }
+                    }
+                }
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::A) && i.modifiers.ctrl) {
+                let tab = &mut self.state.tabs[self.state.active_tab];
+                tab.selected_indices = (0..tab.entries.len()).collect();
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown) && !i.modifiers.alt) {
+                let tab = &mut self.state.tabs[self.state.active_tab];
+                let current = tab.selected_indices.first().copied().unwrap_or(0);
+                let next = (current + 1).min(tab.entries.len().saturating_sub(1));
+                tab.selected_indices = vec![next];
+                tab.last_clicked_index = Some(next);
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) && !i.modifiers.alt) {
+                let tab = &mut self.state.tabs[self.state.active_tab];
+                let current = tab.selected_indices.first().copied().unwrap_or(0);
+                let prev = current.saturating_sub(1);
+                tab.selected_indices = vec![prev];
+                tab.last_clicked_index = Some(prev);
             }
         }
+    }
+}
+
+impl eframe::App for XplorerApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.state.process_responses();
+        self.state.process_file_op_responses();
+        self.process_keyboard_shortcuts(ctx);
 
         let sidebar_action = ui::sidebar::show(ctx, &mut self.state);
         match sidebar_action {

@@ -20,6 +20,7 @@ pub struct AppState {
     pub new_item_mode: Option<NewItemMode>,
     pub new_item_name: String,
     pub toasts: egui_notify::Toasts,
+    pub focus_filter: bool,
     next_tab_id: usize,
 }
 
@@ -50,6 +51,7 @@ impl AppState {
             new_item_mode: None,
             new_item_name: String::new(),
             toasts: egui_notify::Toasts::default().with_anchor(egui_notify::Anchor::BottomRight),
+            focus_filter: false,
             next_tab_id: 1,
         }
     }

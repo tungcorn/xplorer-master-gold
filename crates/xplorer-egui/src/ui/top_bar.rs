@@ -21,9 +21,15 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) {
             }
             ui.separator();
             ui.horizontal(|ui| {
-                show_nav_buttons(ui, state);
-                ui.separator();
-                show_path_area(ui, state);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    show_filter_input(ui, state);
+                    ui.separator();
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        show_nav_buttons(ui, state);
+                        ui.separator();
+                        show_path_area(ui, state);
+                    });
+                });
             });
         });
 }
@@ -120,5 +126,24 @@ fn show_address_bar(ui: &mut egui::Ui, state: &mut AppState) {
         state.editing_address_bar = false;
     } else if escape_pressed || response.lost_focus() {
         state.editing_address_bar = false;
+    }
+}
+
+fn show_filter_input(ui: &mut egui::Ui, state: &mut AppState) {
+    let idx = state.active_tab;
+    let response = ui.add(
+        egui::TextEdit::singleline(&mut state.tabs[idx].filter_text)
+            .hint_text("Filter...")
+            .desired_width(180.0),
+    );
+
+    if state.focus_filter {
+        response.request_focus();
+        state.focus_filter = false;
+    }
+
+    if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        state.tabs[idx].filter_text.clear();
+        response.surrender_focus();
     }
 }
