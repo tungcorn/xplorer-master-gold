@@ -1,30 +1,24 @@
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
+
+use egui_dock::DockState;
 use xplorer_core::types::{Bookmark, DriveInfo, FileEntry};
 
 use crate::watcher::WatchCommand;
 
 pub struct AppState {
-    pub tabs: Vec<Tab>,
-    pub active_tab: usize,
     pub req_sender: std::sync::mpsc::Sender<DirRequest>,
     pub resp_receiver: std::sync::mpsc::Receiver<DirResponse>,
     pub file_op_sender: std::sync::mpsc::Sender<FileOpRequest>,
     pub file_op_receiver: std::sync::mpsc::Receiver<FileOpResponse>,
     pub watcher_sender: Option<std::sync::mpsc::Sender<WatchCommand>>,
-    pub sidebar_width: f32,
     pub show_sidebar: bool,
     pub drives: Vec<DriveInfo>,
     pub bookmarks: Vec<Bookmark>,
-    pub editing_address_bar: bool,
-    pub address_bar_text: String,
     pub clipboard: Option<Clipboard>,
-    pub rename_state: Option<RenameState>,
-    pub new_item_mode: Option<NewItemMode>,
-    pub new_item_name: String,
     pub toasts: egui_notify::Toasts,
     pub focus_filter: bool,
-    next_tab_id: usize,
+    pub next_tab_id: usize,
 }
 
 impl AppState {
@@ -33,61 +27,21 @@ impl AppState {
         resp_receiver: std::sync::mpsc::Receiver<DirResponse>,
         file_op_sender: std::sync::mpsc::Sender<FileOpRequest>,
         file_op_receiver: std::sync::mpsc::Receiver<FileOpResponse>,
-        initial_path: String,
     ) -> Self {
-        let display = display_name_for_path(&initial_path);
         Self {
-            tabs: vec![Tab::new(0, initial_path, display)],
-            active_tab: 0,
             req_sender,
             resp_receiver,
             file_op_sender,
             file_op_receiver,
             watcher_sender: None,
-            sidebar_width: 200.0,
             show_sidebar: true,
             drives: Vec::new(),
             bookmarks: Vec::new(),
-            editing_address_bar: false,
-            address_bar_text: String::new(),
             clipboard: None,
-            rename_state: None,
-            new_item_mode: None,
-            new_item_name: String::new(),
             toasts: egui_notify::Toasts::default().with_anchor(egui_notify::Anchor::BottomRight),
             focus_filter: false,
             next_tab_id: 1,
         }
-    }
-
-    /// Returns the new tab's id.
-    pub fn open_tab(&mut self, path: String) -> usize {
-        let id = self.next_tab_id;
-        self.next_tab_id += 1;
-        let display = display_name_for_path(&path);
-        self.tabs.push(Tab::new(id, path, display));
-        self.active_tab = self.tabs.len() - 1;
-        id
-    }
-
-    /// Returns `false` if it was the last tab (caller should quit or open a default).
-    pub fn close_tab(&mut self, index: usize) -> bool {
-        if self.tabs.len() <= 1 {
-            return false;
-        }
-        self.tabs.remove(index);
-        if self.active_tab >= self.tabs.len() {
-            self.active_tab = self.tabs.len() - 1;
-        }
-        true
-    }
-
-    pub fn active_tab(&self) -> &Tab {
-        &self.tabs[self.active_tab]
-    }
-
-    pub fn active_tab_mut(&mut self) -> &mut Tab {
-        &mut self.tabs[self.active_tab]
     }
 
     pub fn request_load(&self, tab_id: usize, path: String) {
@@ -96,56 +50,106 @@ impl AppState {
             .send(DirRequest::LoadDirectory { tab_id, path });
     }
 
-    pub fn navigate_to(&mut self, path: &str) {
-        let tab = self.active_tab_mut();
+    pub fn navigate_tab(&self, tab: &mut Tab, path: &str) {
         tab.navigate(path.to_string());
-        let tab_id = tab.id;
-        self.request_load(tab_id, path.to_string());
-        self.update_watcher();
+        self.request_load(tab.id, path.to_string());
     }
 
-    pub fn go_back_nav(&mut self) {
-        let tab = self.active_tab_mut();
+    pub fn go_back_tab(&self, tab: &mut Tab) {
         if let Some(path) = tab.go_back() {
-            let tab_id = tab.id;
-            self.request_load(tab_id, path);
+            self.request_load(tab.id, path);
         }
     }
 
-    pub fn go_forward_nav(&mut self) {
-        let tab = self.active_tab_mut();
+    pub fn go_forward_tab(&self, tab: &mut Tab) {
         if let Some(path) = tab.go_forward() {
-            let tab_id = tab.id;
-            self.request_load(tab_id, path);
+            self.request_load(tab.id, path);
         }
     }
 
-    pub fn go_up(&mut self) {
-        let current = self.active_tab().path.clone();
-        if let Some(parent) = std::path::Path::new(&current).parent() {
+    pub fn go_up_tab(&self, tab: &mut Tab) {
+        let current = tab.path.clone();
+        if let Some(parent) = Path::new(&current).parent() {
             let parent_str = parent.to_string_lossy().to_string();
             if parent_str != current {
-                self.navigate_to(&parent_str);
+                self.navigate_tab(tab, &parent_str);
             }
         }
     }
 
-    pub fn new_tab(&mut self) {
-        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
-        let home_str = home.to_string_lossy().to_string();
-        let id = self.open_tab(home_str.clone());
-        self.request_load(id, home_str);
+    pub fn refresh_tab(&self, tab: &Tab) {
+        self.request_load(tab.id, tab.path.clone());
     }
 
-    pub fn switch_tab(&mut self, index: usize) {
-        if index < self.tabs.len() {
-            self.active_tab = index;
-            self.update_watcher();
+    pub fn create_tab(&mut self, path: &str) -> Tab {
+        let id = self.next_tab_id;
+        self.next_tab_id += 1;
+        let display = display_name_for_path(path);
+        Tab::new(id, path.to_string(), display)
+    }
+
+    pub fn do_copy(&mut self, tab: &Tab) {
+        let paths = tab.selected_paths();
+        if !paths.is_empty() {
+            self.clipboard = Some(Clipboard {
+                paths,
+                operation: ClipboardOp::Copy,
+            });
         }
     }
 
-    /// Drain pending responses from the worker and apply them to tabs.
-    pub fn process_responses(&mut self) {
+    pub fn do_cut(&mut self, tab: &Tab) {
+        let paths = tab.selected_paths();
+        if !paths.is_empty() {
+            self.clipboard = Some(Clipboard {
+                paths,
+                operation: ClipboardOp::Cut,
+            });
+        }
+    }
+
+    pub fn do_paste(&mut self, tab: &Tab) {
+        if let Some(clipboard) = self.clipboard.clone() {
+            let dest_dir = tab.path.clone();
+            let request = match clipboard.operation {
+                ClipboardOp::Copy => FileOpRequest::Copy {
+                    sources: clipboard.paths,
+                    dest_dir,
+                },
+                ClipboardOp::Cut => FileOpRequest::Move {
+                    sources: clipboard.paths,
+                    dest_dir,
+                },
+            };
+            let _ = self.file_op_sender.send(request);
+            if clipboard.operation == ClipboardOp::Cut {
+                self.clipboard = None;
+            }
+        }
+    }
+
+    pub fn do_delete(&self, tab: &Tab, to_trash: bool) {
+        let paths = tab.selected_paths();
+        if !paths.is_empty() {
+            let _ = self
+                .file_op_sender
+                .send(FileOpRequest::Delete { paths, to_trash });
+        }
+    }
+
+    pub fn do_rename(&self, path: String, new_name: String) {
+        let parent = Path::new(&path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let new_path = format!("{}\\{}", parent, new_name);
+        let _ = self.file_op_sender.send(FileOpRequest::Rename {
+            old_path: path,
+            new_path,
+        });
+    }
+
+    pub fn process_responses(&mut self, dock: &mut DockState<Tab>) {
         while let Ok(resp) = self.resp_receiver.try_recv() {
             match resp {
                 DirResponse::DirectoryLoaded {
@@ -153,7 +157,7 @@ impl AppState {
                     path,
                     entries,
                 } => {
-                    if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                    if let Some(tab) = find_tab_by_id_mut(dock, tab_id) {
                         tab.loading = false;
                         match entries {
                             Ok(e) => {
@@ -195,12 +199,14 @@ impl AppState {
         }
     }
 
-    pub fn process_file_op_responses(&mut self) {
+    pub fn process_file_op_responses(&mut self, dock: &DockState<Tab>) {
         while let Ok(resp) = self.file_op_receiver.try_recv() {
             match resp {
                 FileOpResponse::Success { message } => {
                     self.toasts.success(message);
-                    self.refresh_active_tab();
+                    if let Some(tab) = focused_tab(dock) {
+                        self.request_load(tab.id, tab.path.clone());
+                    }
                 }
                 FileOpResponse::Error { message } => {
                     self.toasts.error(message);
@@ -209,100 +215,45 @@ impl AppState {
         }
     }
 
-    pub fn refresh_active_tab(&self) {
-        let tab = self.active_tab();
-        self.request_load(tab.id, tab.path.clone());
-    }
-
-    pub fn do_copy(&mut self) {
-        let paths = self.selected_paths();
-        if !paths.is_empty() {
-            self.clipboard = Some(Clipboard {
-                paths,
-                operation: ClipboardOp::Copy,
-            });
-        }
-    }
-
-    pub fn do_cut(&mut self) {
-        let paths = self.selected_paths();
-        if !paths.is_empty() {
-            self.clipboard = Some(Clipboard {
-                paths,
-                operation: ClipboardOp::Cut,
-            });
-        }
-    }
-
-    pub fn do_paste(&mut self) {
-        if let Some(clipboard) = self.clipboard.clone() {
-            let dest_dir = self.active_tab().path.clone();
-            let request = match clipboard.operation {
-                ClipboardOp::Copy => FileOpRequest::Copy {
-                    sources: clipboard.paths,
-                    dest_dir,
-                },
-                ClipboardOp::Cut => FileOpRequest::Move {
-                    sources: clipboard.paths,
-                    dest_dir,
-                },
-            };
-            let _ = self.file_op_sender.send(request);
-            if clipboard.operation == ClipboardOp::Cut {
-                self.clipboard = None;
+    pub fn update_watcher(&self, dock: &DockState<Tab>) {
+        if let Some(ref sender) = self.watcher_sender {
+            if let Some(tab) = focused_tab(dock) {
+                let _ = sender.send(WatchCommand::Watch {
+                    tab_id: tab.id,
+                    path: tab.path.clone(),
+                });
             }
         }
     }
+}
 
-    pub fn do_delete(&mut self, to_trash: bool) {
-        let paths = self.selected_paths();
-        if !paths.is_empty() {
-            let _ = self
-                .file_op_sender
-                .send(FileOpRequest::Delete { paths, to_trash });
+pub fn focused_tab(dock: &DockState<Tab>) -> Option<&Tab> {
+    let (surface, node_idx) = dock.focused_leaf()?;
+    let node = &dock[surface][node_idx];
+    match node {
+        egui_dock::Node::Leaf { tabs, active, .. } => tabs.get(active.0),
+        _ => None,
+    }
+}
+
+pub fn focused_tab_mut(dock: &mut DockState<Tab>) -> Option<&mut Tab> {
+    let (surface, node_idx) = dock.focused_leaf()?;
+    let node = &mut dock[surface][node_idx];
+    match node {
+        egui_dock::Node::Leaf { tabs, active, .. } => tabs.get_mut(active.0),
+        _ => None,
+    }
+}
+
+pub fn find_tab_by_id_mut(dock: &mut DockState<Tab>, id: usize) -> Option<&mut Tab> {
+    for (_surface_index, node) in dock.iter_all_nodes_mut() {
+        if let Some(tabs) = node.tabs_mut() {
+            if let Some(tab) = tabs.iter_mut().find(|t| t.id == id) {
+                return Some(tab);
+            }
         }
     }
-
-    pub fn do_rename(&mut self, path: String, new_name: String) {
-        let parent = Path::new(&path)
-            .parent()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_default();
-        let new_path = format!("{}\\{}", parent, new_name);
-        let _ = self.file_op_sender.send(FileOpRequest::Rename {
-            old_path: path,
-            new_path,
-        });
-    }
-
-    pub fn do_create_folder(&mut self) {
-        self.new_item_mode = Some(NewItemMode::Folder);
-        self.new_item_name = "New Folder".to_string();
-    }
-
-    pub fn do_create_file(&mut self) {
-        self.new_item_mode = Some(NewItemMode::File);
-        self.new_item_name = "New File.txt".to_string();
-    }
-
-    pub fn selected_paths(&self) -> Vec<String> {
-        let tab = self.active_tab();
-        tab.selected_indices
-            .iter()
-            .filter_map(|&i| tab.entries.get(i))
-            .map(|e| e.path.clone())
-            .collect()
-    }
-
-    pub fn update_watcher(&self) {
-        if let Some(ref sender) = self.watcher_sender {
-            let tab = self.active_tab();
-            let _ = sender.send(WatchCommand::Watch {
-                tab_id: tab.id,
-                path: tab.path.clone(),
-            });
-        }
-    }
+    None
 }
 
 pub struct Tab {
@@ -319,6 +270,11 @@ pub struct Tab {
     pub filter_text: String,
     pub selected_indices: Vec<usize>,
     pub last_clicked_index: Option<usize>,
+    pub editing_address_bar: bool,
+    pub address_bar_text: String,
+    pub rename_state: Option<RenameState>,
+    pub new_item_mode: Option<NewItemMode>,
+    pub new_item_name: String,
 }
 
 impl Tab {
@@ -337,6 +293,11 @@ impl Tab {
             filter_text: String::new(),
             selected_indices: Vec::new(),
             last_clicked_index: None,
+            editing_address_bar: false,
+            address_bar_text: String::new(),
+            rename_state: None,
+            new_item_mode: None,
+            new_item_name: String::new(),
         }
     }
 
@@ -414,6 +375,14 @@ impl Tab {
         });
         self.selected_indices.clear();
     }
+
+    pub fn selected_paths(&self) -> Vec<String> {
+        self.selected_indices
+            .iter()
+            .filter_map(|&i| self.entries.get(i))
+            .map(|e| e.path.clone())
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -489,7 +458,7 @@ pub enum FileOpResponse {
     Error { message: String },
 }
 
-fn display_name_for_path(path: &str) -> String {
+pub fn display_name_for_path(path: &str) -> String {
     PathBuf::from(path)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())

@@ -5,276 +5,276 @@ use egui_extras::{Column, TableBuilder};
 use xplorer_core::types::FileEntry;
 
 use crate::icons;
-use crate::state::{AppState, NewItemMode, SortColumn};
+use crate::state::{AppState, NewItemMode, SortColumn, Tab};
 use crate::theme;
 use crate::ui::context_menu::{self, EmptyAreaAction, FileContextAction};
+use crate::ui::dock_viewer::ViewerAction;
 
-pub fn show(ctx: &egui::Context, state: &mut AppState) {
-    egui::CentralPanel::default()
-        .frame(egui::Frame::central_panel(&ctx.style()).fill(theme::BACKGROUND))
-        .show(ctx, |ui| {
-            if let Some(mode) = state.new_item_mode.clone() {
-                show_new_item_input(ui, state, &mode);
-            }
+pub fn show_for_tab(
+    ui: &mut egui::Ui,
+    tab: &mut Tab,
+    state: &mut AppState,
+    actions: &mut Vec<ViewerAction>,
+) {
+    if let Some(mode) = tab.new_item_mode.clone() {
+        show_new_item_input(ui, tab, state, &mode, actions);
+    }
 
-            let tab = &state.tabs[state.active_tab];
-            if tab.loading {
-                ui.centered_and_justified(|ui| {
-                    ui.spinner();
-                });
-                return;
-            }
-            if let Some(err) = &tab.error {
-                ui.colored_label(theme::WARNING, format!("Error: {}", err));
-                return;
-            }
-
-            let filtered: Vec<(usize, &FileEntry)> = tab
-                .entries
-                .iter()
-                .enumerate()
-                .filter(|(_, e)| {
-                    tab.filter_text.is_empty()
-                        || e.name
-                            .to_lowercase()
-                            .contains(&tab.filter_text.to_lowercase())
-                })
-                .collect();
-
-            if filtered.is_empty() && tab.filter_text.is_empty() {
-                ui.centered_and_justified(|ui| {
-                    ui.label(egui::RichText::new("Empty directory").color(theme::MUTED));
-                });
-                return;
-            }
-
-            let sort_col = tab.sort_column;
-            let sort_asc = tab.sort_ascending;
-            let selected = tab.selected_indices.clone();
-            let has_clipboard = state.clipboard.is_some();
-            let rename_idx = state.rename_state.as_ref().map(|r| r.entry_index);
-
-            let mut sort_clicked: Option<SortColumn> = None;
-            let mut selection_action: Option<SelectionAction> = None;
-            let mut double_click_action: Option<DoubleClickAction> = None;
-            let mut file_ctx_action: Option<(FileContextAction, String, bool)> = None;
-            let mut rename_commit: Option<(String, String)> = None;
-            let mut any_row_hovered = false;
-
-            let text_height = ui.text_style_height(&egui::TextStyle::Body);
-            let row_height = (text_height + 16.0).max(32.0);
-
-            let empty_area_resp = ui.interact(
-                ui.available_rect_before_wrap(),
-                egui::Id::new("file_list_empty_bg"),
-                egui::Sense::hover(),
-            );
-
-            let table = TableBuilder::new(ui)
-                .striped(false)
-                .resizable(true)
-                .sense(egui::Sense::click())
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .column(Column::initial(300.0).at_least(150.0))
-                .column(Column::initial(80.0).at_least(50.0))
-                .column(Column::initial(100.0).at_least(60.0))
-                .column(Column::initial(150.0).at_least(80.0));
-
-            table
-                .header(row_height, |mut header| {
-                    header.col(|ui| {
-                        show_sort_header(
-                            ui,
-                            "Name",
-                            SortColumn::Name,
-                            sort_col,
-                            sort_asc,
-                            &mut sort_clicked,
-                        );
-                    });
-                    header.col(|ui| {
-                        show_sort_header(
-                            ui,
-                            "Size",
-                            SortColumn::Size,
-                            sort_col,
-                            sort_asc,
-                            &mut sort_clicked,
-                        );
-                    });
-                    header.col(|ui| {
-                        show_sort_header(
-                            ui,
-                            "Type",
-                            SortColumn::Type,
-                            sort_col,
-                            sort_asc,
-                            &mut sort_clicked,
-                        );
-                    });
-                    header.col(|ui| {
-                        show_sort_header(
-                            ui,
-                            "Modified",
-                            SortColumn::Modified,
-                            sort_col,
-                            sort_asc,
-                            &mut sort_clicked,
-                        );
-                    });
-                })
-                .body(|body| {
-                    body.rows(row_height, filtered.len(), |mut row| {
-                        let idx = row.index();
-                        let (original_idx, entry) = &filtered[idx];
-                        let is_selected = selected.contains(original_idx);
-
-                        row.set_selected(is_selected);
-
-                        let (_, name_resp) = row.col(|ui| {
-                            if rename_idx == Some(*original_idx) {
-                                if let Some(ref mut rs) = state.rename_state {
-                                    let response = ui.text_edit_singleline(&mut rs.new_name);
-                                    if !response.has_focus() {
-                                        response.request_focus();
-                                    }
-                                    let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                    let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
-                                    if enter {
-                                        rename_commit =
-                                            Some((entry.path.clone(), rs.new_name.clone()));
-                                    }
-                                    if enter || escape || response.lost_focus() {
-                                        state.rename_state = None;
-                                    }
-                                }
-                            } else {
-                                let ext = Path::new(&entry.name)
-                                    .extension()
-                                    .map(|e| e.to_string_lossy().to_string())
-                                    .unwrap_or_default();
-                                let (icon, icon_color) = icons::file_icon(&ext, entry.is_dir);
-
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 6.0;
-                                    ui.label(
-                                        egui::RichText::new(icon).color(icon_color).size(16.0),
-                                    );
-                                    ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(&entry.name).color(theme::TEXT),
-                                        )
-                                        .selectable(false)
-                                        .truncate(),
-                                    );
-                                });
-                            }
-                        });
-
-                        let (_, size_resp) = row.col(|ui| {
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let size_text = if entry.is_dir {
-                                        "—".to_string()
-                                    } else {
-                                        format_size(entry.size)
-                                    };
-                                    ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(size_text).color(theme::SECONDARY),
-                                        )
-                                        .selectable(false),
-                                    );
-                                },
-                            );
-                        });
-
-                        let (_, type_resp) = row.col(|ui| {
-                            let type_label = human_file_type(&entry.file_type, entry.is_dir);
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(type_label).color(theme::SECONDARY),
-                                )
-                                .selectable(false),
-                            );
-                        });
-
-                        let (_, mod_resp) = row.col(|ui| {
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(format_timestamp(entry.modified))
-                                        .color(theme::SECONDARY),
-                                )
-                                .selectable(false),
-                            );
-                        });
-
-                        let combined = name_resp | size_resp | type_resp | mod_resp;
-                        let interact = combined | row.response();
-                        if interact.hovered() {
-                            any_row_hovered = true;
-                        }
-
-                        let ctx_action =
-                            context_menu::file_context_menu(&interact, entry.is_dir, has_clipboard);
-                        if !matches!(ctx_action, FileContextAction::None) {
-                            file_ctx_action = Some((ctx_action, entry.path.clone(), entry.is_dir));
-                        }
-
-                        if rename_idx != Some(*original_idx) {
-                            if interact.double_clicked() {
-                                if entry.is_dir {
-                                    double_click_action =
-                                        Some(DoubleClickAction::NavigateDir(entry.path.clone()));
-                                } else {
-                                    double_click_action =
-                                        Some(DoubleClickAction::OpenFile(entry.path.clone()));
-                                }
-                            } else if interact.clicked() {
-                                let modifiers = interact.ctx.input(|i| i.modifiers);
-                                selection_action = Some(SelectionAction {
-                                    index: *original_idx,
-                                    ctrl: modifiers.ctrl || modifiers.mac_cmd,
-                                    shift: modifiers.shift,
-                                });
-                            }
-                        }
-                    });
-                });
-
-            if let Some(col) = sort_clicked {
-                state.active_tab_mut().toggle_sort(col);
-            }
-
-            if let Some(action) = selection_action {
-                apply_selection(state, action);
-            }
-
-            match double_click_action {
-                Some(DoubleClickAction::NavigateDir(path)) => {
-                    state.navigate_to(&path);
-                }
-                Some(DoubleClickAction::OpenFile(path)) => {
-                    let _ = xplorer_core::system::open_file(Path::new(&path));
-                }
-                None => {}
-            }
-
-            if let Some((action, path, is_dir)) = file_ctx_action {
-                handle_file_context_action(state, action, &path, is_dir);
-            } else if !any_row_hovered {
-                let current_path = state.active_tab().path.clone();
-                let has_clipboard = state.clipboard.is_some();
-                let empty_action =
-                    context_menu::empty_area_context_menu(&empty_area_resp, has_clipboard);
-                handle_empty_area_action(state, empty_action, &current_path);
-            }
-
-            if let Some((old_path, new_name)) = rename_commit {
-                state.do_rename(old_path, new_name);
-            }
+    if tab.loading {
+        ui.centered_and_justified(|ui| {
+            ui.spinner();
         });
+        return;
+    }
+    if let Some(err) = &tab.error {
+        ui.colored_label(theme::WARNING, format!("Error: {}", err));
+        return;
+    }
+
+    let filtered: Vec<(usize, &FileEntry)> = tab
+        .entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| {
+            tab.filter_text.is_empty()
+                || e.name
+                    .to_lowercase()
+                    .contains(&tab.filter_text.to_lowercase())
+        })
+        .collect();
+
+    if filtered.is_empty() && tab.filter_text.is_empty() {
+        ui.centered_and_justified(|ui| {
+            ui.label(egui::RichText::new("Empty directory").color(theme::MUTED));
+        });
+        return;
+    }
+
+    let sort_col = tab.sort_column;
+    let sort_asc = tab.sort_ascending;
+    let selected = tab.selected_indices.clone();
+    let has_clipboard = state.clipboard.is_some();
+    let rename_idx = tab.rename_state.as_ref().map(|r| r.entry_index);
+
+    let mut sort_clicked: Option<SortColumn> = None;
+    let mut selection_action: Option<SelectionAction> = None;
+    let mut double_click_action: Option<DoubleClickAction> = None;
+    let mut middle_click_split: Option<String> = None;
+    let mut file_ctx_action: Option<(FileContextAction, String, bool)> = None;
+    let mut rename_commit: Option<(String, String)> = None;
+    let mut any_row_hovered = false;
+
+    let text_height = ui.text_style_height(&egui::TextStyle::Body);
+    let row_height = (text_height + 16.0).max(32.0);
+
+    let empty_area_resp = ui.interact(
+        ui.available_rect_before_wrap(),
+        egui::Id::new(("file_list_empty_bg", tab.id)),
+        egui::Sense::hover(),
+    );
+
+    let table = TableBuilder::new(ui)
+        .striped(false)
+        .resizable(true)
+        .sense(egui::Sense::click())
+        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+        .id_salt(("file_table", tab.id))
+        .column(Column::remainder().at_least(80.0).clip(true))
+        .column(Column::initial(80.0).at_least(50.0).clip(true))
+        .column(Column::initial(100.0).at_least(60.0).clip(true))
+        .column(Column::initial(150.0).at_least(80.0).clip(true));
+
+    table
+        .header(row_height, |mut header| {
+            header.col(|ui| {
+                show_sort_header(
+                    ui,
+                    "Name",
+                    SortColumn::Name,
+                    sort_col,
+                    sort_asc,
+                    &mut sort_clicked,
+                );
+            });
+            header.col(|ui| {
+                show_sort_header(
+                    ui,
+                    "Size",
+                    SortColumn::Size,
+                    sort_col,
+                    sort_asc,
+                    &mut sort_clicked,
+                );
+            });
+            header.col(|ui| {
+                show_sort_header(
+                    ui,
+                    "Type",
+                    SortColumn::Type,
+                    sort_col,
+                    sort_asc,
+                    &mut sort_clicked,
+                );
+            });
+            header.col(|ui| {
+                show_sort_header(
+                    ui,
+                    "Modified",
+                    SortColumn::Modified,
+                    sort_col,
+                    sort_asc,
+                    &mut sort_clicked,
+                );
+            });
+        })
+        .body(|body| {
+            body.rows(row_height, filtered.len(), |mut row| {
+                let idx = row.index();
+                let (original_idx, entry) = &filtered[idx];
+                let is_selected = selected.contains(original_idx);
+
+                row.set_selected(is_selected);
+
+                let (_, name_resp) = row.col(|ui| {
+                    if rename_idx == Some(*original_idx) {
+                        if let Some(ref mut rs) = tab.rename_state {
+                            let response = ui.text_edit_singleline(&mut rs.new_name);
+                            if !response.has_focus() {
+                                response.request_focus();
+                            }
+                            let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
+                            let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+                            if enter {
+                                rename_commit = Some((entry.path.clone(), rs.new_name.clone()));
+                            }
+                            if enter || escape || response.lost_focus() {
+                                tab.rename_state = None;
+                            }
+                        }
+                    } else {
+                        let ext = Path::new(&entry.name)
+                            .extension()
+                            .map(|e| e.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        let (icon, icon_color) = icons::file_icon(&ext, entry.is_dir);
+
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            ui.label(egui::RichText::new(icon).color(icon_color).size(16.0));
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&entry.name).color(theme::TEXT),
+                                )
+                                .selectable(false)
+                                .truncate(),
+                            );
+                        });
+                    }
+                });
+
+                let (_, size_resp) = row.col(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let size_text = if entry.is_dir {
+                            "—".to_string()
+                        } else {
+                            format_size(entry.size)
+                        };
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(size_text).color(theme::SECONDARY),
+                            )
+                            .selectable(false),
+                        );
+                    });
+                });
+
+                let (_, type_resp) = row.col(|ui| {
+                    let type_label = human_file_type(&entry.file_type, entry.is_dir);
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(type_label).color(theme::SECONDARY))
+                            .selectable(false),
+                    );
+                });
+
+                let (_, mod_resp) = row.col(|ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format_timestamp(entry.modified))
+                                .color(theme::SECONDARY),
+                        )
+                        .selectable(false),
+                    );
+                });
+
+                let combined = name_resp | size_resp | type_resp | mod_resp;
+                let interact = combined | row.response();
+                if interact.hovered() {
+                    any_row_hovered = true;
+                }
+
+                let ctx_action =
+                    context_menu::file_context_menu(&interact, entry.is_dir, has_clipboard);
+                if !matches!(ctx_action, FileContextAction::None) {
+                    file_ctx_action = Some((ctx_action, entry.path.clone(), entry.is_dir));
+                }
+
+                if rename_idx != Some(*original_idx) {
+                    if interact.middle_clicked() && entry.is_dir {
+                        middle_click_split = Some(entry.path.clone());
+                    } else if interact.double_clicked() {
+                        if entry.is_dir {
+                            double_click_action =
+                                Some(DoubleClickAction::NavigateDir(entry.path.clone()));
+                        } else {
+                            double_click_action =
+                                Some(DoubleClickAction::OpenFile(entry.path.clone()));
+                        }
+                    } else if interact.clicked() {
+                        let modifiers = interact.ctx.input(|i| i.modifiers);
+                        selection_action = Some(SelectionAction {
+                            index: *original_idx,
+                            ctrl: modifiers.ctrl || modifiers.mac_cmd,
+                            shift: modifiers.shift,
+                        });
+                    }
+                }
+            });
+        });
+
+    if let Some(col) = sort_clicked {
+        tab.toggle_sort(col);
+    }
+
+    if let Some(action) = selection_action {
+        apply_selection(tab, action);
+    }
+
+    match double_click_action {
+        Some(DoubleClickAction::NavigateDir(path)) => {
+            actions.push(ViewerAction::Navigate(path));
+        }
+        Some(DoubleClickAction::OpenFile(path)) => {
+            let _ = xplorer_core::system::open_file(Path::new(&path));
+        }
+        None => {}
+    }
+
+    if let Some(path) = middle_click_split {
+        actions.push(ViewerAction::SplitRight { path });
+    }
+
+    if let Some((action, path, is_dir)) = file_ctx_action {
+        handle_file_context_action(tab, state, actions, action, &path, is_dir);
+    } else if !any_row_hovered {
+        let current_path = tab.path.clone();
+        let has_clipboard = state.clipboard.is_some();
+        let empty_action = context_menu::empty_area_context_menu(&empty_area_resp, has_clipboard);
+        handle_empty_area_action(tab, state, actions, empty_action, &current_path);
+    }
+
+    if let Some((old_path, new_name)) = rename_commit {
+        state.do_rename(old_path, new_name);
+    }
 }
 
 fn show_sort_header(
@@ -323,8 +323,7 @@ enum DoubleClickAction {
     OpenFile(String),
 }
 
-fn apply_selection(state: &mut AppState, action: SelectionAction) {
-    let tab = state.active_tab_mut();
+fn apply_selection(tab: &mut Tab, action: SelectionAction) {
     if action.shift {
         if let Some(anchor) = tab.last_clicked_index {
             let start = anchor.min(action.index);
@@ -452,7 +451,9 @@ fn human_file_type(raw_type: &str, is_dir: bool) -> String {
 }
 
 fn handle_file_context_action(
+    tab: &mut Tab,
     state: &mut AppState,
+    actions: &mut Vec<ViewerAction>,
     action: FileContextAction,
     path: &str,
     is_dir: bool,
@@ -460,7 +461,7 @@ fn handle_file_context_action(
     match action {
         FileContextAction::Open => {
             if is_dir {
-                state.navigate_to(path);
+                actions.push(ViewerAction::Navigate(path.to_string()));
             } else {
                 let _ = xplorer_core::system::open_file(Path::new(path));
             }
@@ -498,19 +499,18 @@ fn handle_file_context_action(
                     .spawn();
             }
         }
-        FileContextAction::Copy => state.do_copy(),
-        FileContextAction::Cut => state.do_cut(),
-        FileContextAction::Paste => state.do_paste(),
-        FileContextAction::Delete => state.do_delete(false),
-        FileContextAction::MoveToTrash => state.do_delete(true),
+        FileContextAction::Copy => state.do_copy(tab),
+        FileContextAction::Cut => state.do_cut(tab),
+        FileContextAction::Paste => state.do_paste(tab),
+        FileContextAction::Delete => state.do_delete(tab, false),
+        FileContextAction::MoveToTrash => state.do_delete(tab, true),
         FileContextAction::Rename => {
             let name = Path::new(path)
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
-            let tab = state.active_tab();
             if let Some(idx) = tab.entries.iter().position(|e| e.path == path) {
-                state.rename_state = Some(crate::state::RenameState {
+                tab.rename_state = Some(crate::state::RenameState {
                     entry_index: idx,
                     new_name: name,
                 });
@@ -520,13 +520,19 @@ fn handle_file_context_action(
     }
 }
 
-fn handle_empty_area_action(state: &mut AppState, action: EmptyAreaAction, current_path: &str) {
+fn handle_empty_area_action(
+    tab: &mut Tab,
+    state: &mut AppState,
+    actions: &mut Vec<ViewerAction>,
+    action: EmptyAreaAction,
+    current_path: &str,
+) {
     match action {
         EmptyAreaAction::Refresh => {
-            let tab = state.active_tab();
-            let tab_id = tab.id;
-            let path = tab.path.clone();
-            state.request_load(tab_id, path);
+            actions.push(ViewerAction::RequestLoad {
+                tab_id: tab.id,
+                path: tab.path.clone(),
+            });
         }
         EmptyAreaAction::OpenInTerminal => {
             #[cfg(windows)]
@@ -542,29 +548,40 @@ fn handle_empty_area_action(state: &mut AppState, action: EmptyAreaAction, curre
                     .spawn();
             }
         }
-        EmptyAreaAction::NewFolder => state.do_create_folder(),
-        EmptyAreaAction::NewFile => state.do_create_file(),
-        EmptyAreaAction::Paste => state.do_paste(),
+        EmptyAreaAction::NewFolder => {
+            tab.new_item_mode = Some(NewItemMode::Folder);
+            tab.new_item_name = "New Folder".to_string();
+        }
+        EmptyAreaAction::NewFile => {
+            tab.new_item_mode = Some(NewItemMode::File);
+            tab.new_item_name = "New File.txt".to_string();
+        }
+        EmptyAreaAction::Paste => state.do_paste(tab),
         EmptyAreaAction::None => {}
     }
 }
 
-fn show_new_item_input(ui: &mut egui::Ui, state: &mut AppState, mode: &NewItemMode) {
+fn show_new_item_input(
+    ui: &mut egui::Ui,
+    tab: &mut Tab,
+    state: &AppState,
+    mode: &NewItemMode,
+    _actions: &mut Vec<ViewerAction>,
+) {
     let label = match mode {
         NewItemMode::Folder => "New folder name:",
         NewItemMode::File => "New file name:",
     };
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(label).color(theme::MUTED).size(12.0));
-        let response = ui.text_edit_singleline(&mut state.new_item_name);
+        let response = ui.text_edit_singleline(&mut tab.new_item_name);
         if !response.has_focus() {
             response.request_focus();
         }
         let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
         let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
-        if enter && !state.new_item_name.trim().is_empty() {
-            let parent = state.active_tab().path.clone();
-            let full_path = format!("{}\\{}", parent, state.new_item_name.trim());
+        if enter && !tab.new_item_name.trim().is_empty() {
+            let full_path = format!("{}\\{}", tab.path, tab.new_item_name.trim());
             let request = match mode {
                 NewItemMode::Folder => {
                     crate::state::FileOpRequest::CreateFolder { path: full_path }
@@ -572,11 +589,11 @@ fn show_new_item_input(ui: &mut egui::Ui, state: &mut AppState, mode: &NewItemMo
                 NewItemMode::File => crate::state::FileOpRequest::CreateFile { path: full_path },
             };
             let _ = state.file_op_sender.send(request);
-            state.new_item_mode = None;
-            state.new_item_name.clear();
+            tab.new_item_mode = None;
+            tab.new_item_name.clear();
         } else if escape {
-            state.new_item_mode = None;
-            state.new_item_name.clear();
+            tab.new_item_mode = None;
+            tab.new_item_name.clear();
         }
     });
     ui.add_space(4.0);

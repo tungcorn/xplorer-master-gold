@@ -125,3 +125,47 @@ pub fn setup_fonts(ctx: &egui::Context) {
 
     ctx.set_style(style);
 }
+
+pub fn dock_style(egui_style: &egui::Style) -> egui_dock::Style {
+    let mut style = egui_dock::Style::from_egui(egui_style);
+
+    style.tab_bar.bg_fill = CAPTION;
+    style.tab_bar.hline_color = BORDER;
+    style.tab_bar.height = 32.0;
+
+    style.tab.active.bg_fill = BACKGROUND;
+    style.tab.active.text_color = TEXT;
+    style.tab.active.outline_color = BORDER;
+
+    style.tab.inactive.bg_fill = CAPTION;
+    style.tab.inactive.text_color = SECONDARY;
+    style.tab.inactive.outline_color = BORDER;
+
+    style.tab.focused.bg_fill = BACKGROUND;
+    style.tab.focused.text_color = TEXT;
+    style.tab.focused.outline_color = SELECTION;
+
+    style.tab.hovered.bg_fill = HOVER;
+    style.tab.hovered.text_color = TEXT;
+    style.tab.hovered.outline_color = SELECTION;
+
+    style.tab.tab_body.bg_fill = BACKGROUND;
+    style.tab.tab_body.inner_margin = egui::Margin::same(0);
+    style.tab.tab_body.stroke = egui::Stroke::new(1.0, BORDER);
+
+    style.separator.width = 1.0;
+    style.separator.extra_interact_width = 4.0;
+    style.separator.color_idle = BORDER;
+    style.separator.color_hovered = SELECTION;
+    style.separator.color_dragged = SELECTION;
+
+    style.overlay.selection_color = SELECTION.gamma_multiply(0.3);
+    style.overlay.overlay_type = egui_dock::OverlayType::HighlightedAreas;
+
+    style.buttons.close_tab_color = MUTED;
+    style.buttons.close_tab_active_color = WARNING;
+    style.buttons.add_tab_color = MUTED;
+    style.buttons.add_tab_active_color = SELECTION;
+
+    style
+}

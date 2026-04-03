@@ -10,7 +10,7 @@ pub enum SidebarAction {
     RemoveBookmark(String),
 }
 
-pub fn show(ctx: &egui::Context, state: &mut AppState) -> SidebarAction {
+pub fn show(ctx: &egui::Context, state: &AppState, focused_path: &str) -> SidebarAction {
     let mut action = SidebarAction::None;
 
     if !state.show_sidebar {
@@ -28,11 +28,11 @@ pub fn show(ctx: &egui::Context, state: &mut AppState) -> SidebarAction {
         )
         .show(ctx, |ui| {
             ui.add_space(4.0);
-            show_quick_access(ui, state, &mut action);
+            show_quick_access(ui, focused_path, &mut action);
             ui.add_space(8.0);
-            show_drives_section(ui, state, &mut action);
+            show_drives_section(ui, state, focused_path, &mut action);
             ui.add_space(8.0);
-            show_favorites_section(ui, state, &mut action);
+            show_favorites_section(ui, state, focused_path, &mut action);
         });
 
     action
@@ -68,10 +68,9 @@ fn sidebar_item(ui: &mut egui::Ui, icon: &str, label: &str, is_active: bool) -> 
     ui.selectable_label(is_active, rich)
 }
 
-fn show_quick_access(ui: &mut egui::Ui, state: &AppState, action: &mut SidebarAction) {
+fn show_quick_access(ui: &mut egui::Ui, focused_path: &str, action: &mut SidebarAction) {
     section_header(ui, "Quick Access");
 
-    let active_path = &state.active_tab().path;
     let quick_items: [(&str, &str, Option<std::path::PathBuf>); 4] = [
         (icons::HOME, "Home", dirs::home_dir()),
         (icons::DESKTOP, "Desktop", dirs::desktop_dir()),
@@ -82,7 +81,7 @@ fn show_quick_access(ui: &mut egui::Ui, state: &AppState, action: &mut SidebarAc
     for (icon, label, path_opt) in &quick_items {
         if let Some(path) = path_opt {
             let path_str = path.to_string_lossy().to_string();
-            let is_active = *active_path == path_str;
+            let is_active = focused_path == path_str;
             if sidebar_item(ui, icon, label, is_active).clicked() {
                 *action = SidebarAction::Navigate(path_str);
             }
@@ -90,18 +89,21 @@ fn show_quick_access(ui: &mut egui::Ui, state: &AppState, action: &mut SidebarAc
     }
 }
 
-fn show_drives_section(ui: &mut egui::Ui, state: &AppState, action: &mut SidebarAction) {
+fn show_drives_section(
+    ui: &mut egui::Ui,
+    state: &AppState,
+    focused_path: &str,
+    action: &mut SidebarAction,
+) {
     section_header(ui, "Drives");
-
-    let active_path = &state.active_tab().path;
 
     for drive in &state.drives {
         let label = format!("{} ({})", drive.name, drive.mount_point);
-        let is_active = active_path.starts_with(&drive.mount_point)
+        let is_active = focused_path.starts_with(&drive.mount_point)
             && state
                 .drives
                 .iter()
-                .filter(|d| active_path.starts_with(&d.mount_point))
+                .filter(|d| focused_path.starts_with(&d.mount_point))
                 .all(|d| d.mount_point.len() <= drive.mount_point.len());
 
         if sidebar_item(ui, icons::DRIVE, &label, is_active).clicked() {
@@ -148,7 +150,12 @@ fn show_drives_section(ui: &mut egui::Ui, state: &AppState, action: &mut Sidebar
     }
 }
 
-fn show_favorites_section(ui: &mut egui::Ui, state: &AppState, action: &mut SidebarAction) {
+fn show_favorites_section(
+    ui: &mut egui::Ui,
+    state: &AppState,
+    focused_path: &str,
+    action: &mut SidebarAction,
+) {
     section_header(ui, "Favorites");
 
     if state.bookmarks.is_empty() {
@@ -161,10 +168,8 @@ fn show_favorites_section(ui: &mut egui::Ui, state: &AppState, action: &mut Side
         return;
     }
 
-    let active_path = &state.active_tab().path;
-
     for bookmark in &state.bookmarks {
-        let is_active = *active_path == bookmark.path;
+        let is_active = focused_path == bookmark.path;
         let response = sidebar_item(ui, icons::BOOKMARK, &bookmark.name, is_active);
         if response.clicked() {
             *action = SidebarAction::Navigate(bookmark.path.clone());
