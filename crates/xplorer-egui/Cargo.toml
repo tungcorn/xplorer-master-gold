@@ -12,3 +12,4 @@ egui-notify = "0.19"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 dirs = "5.0"
 chrono = { version = "0.4", features = ["serde"] }
+arboard = "3"
