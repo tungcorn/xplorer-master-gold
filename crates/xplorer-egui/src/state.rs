@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 
 use egui_dock::DockState;
 use xplorer_core::types::{Bookmark, DriveInfo, FileEntry};
@@ -7,11 +9,11 @@ use xplorer_core::types::{Bookmark, DriveInfo, FileEntry};
 use crate::watcher::WatchCommand;
 
 pub struct AppState {
-    pub req_sender: std::sync::mpsc::Sender<DirRequest>,
-    pub resp_receiver: std::sync::mpsc::Receiver<DirResponse>,
-    pub file_op_sender: std::sync::mpsc::Sender<FileOpRequest>,
-    pub file_op_receiver: std::sync::mpsc::Receiver<FileOpResponse>,
-    pub watcher_sender: Option<std::sync::mpsc::Sender<WatchCommand>>,
+    pub req_sender: mpsc::Sender<DirRequest>,
+    pub resp_rx: mpsc::Receiver<DirResponse>,
+    pub file_op_sender: mpsc::Sender<FileOpRequest>,
+    pub file_op_rx: mpsc::Receiver<FileOpResponse>,
+    pub watcher_sender: Option<mpsc::Sender<WatchCommand>>,
     pub show_sidebar: bool,
     pub drives: Vec<DriveInfo>,
     pub bookmarks: Vec<Bookmark>,
@@ -23,16 +25,16 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        req_sender: std::sync::mpsc::Sender<DirRequest>,
-        resp_receiver: std::sync::mpsc::Receiver<DirResponse>,
-        file_op_sender: std::sync::mpsc::Sender<FileOpRequest>,
-        file_op_receiver: std::sync::mpsc::Receiver<FileOpResponse>,
+        req_sender: mpsc::Sender<DirRequest>,
+        resp_rx: mpsc::Receiver<DirResponse>,
+        file_op_sender: mpsc::Sender<FileOpRequest>,
+        file_op_rx: mpsc::Receiver<FileOpResponse>,
     ) -> Self {
         Self {
             req_sender,
-            resp_receiver,
+            resp_rx,
             file_op_sender,
-            file_op_receiver,
+            file_op_rx,
             watcher_sender: None,
             show_sidebar: true,
             drives: Vec::new(),
@@ -138,11 +140,10 @@ impl AppState {
     }
 
     pub fn do_rename(&self, path: String, new_name: String) {
-        let parent = Path::new(&path)
-            .parent()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_default();
-        let new_path = format!("{}\\{}", parent, new_name);
+        let new_path = Path::new(&path)
+            .with_file_name(&new_name)
+            .to_string_lossy()
+            .to_string();
         let _ = self.file_op_sender.send(FileOpRequest::Rename {
             old_path: path,
             new_path,
@@ -150,7 +151,7 @@ impl AppState {
     }
 
     pub fn process_responses(&mut self, dock: &mut DockState<Tab>) {
-        while let Ok(resp) = self.resp_receiver.try_recv() {
+        for resp in self.resp_rx.try_iter() {
             match resp {
                 DirResponse::DirectoryLoaded {
                     tab_id,
@@ -163,7 +164,7 @@ impl AppState {
                             Ok(e) => {
                                 let is_refresh = tab.path == path;
                                 let saved_paths: Vec<String> = if is_refresh {
-                                    tab.selected_indices
+                                    tab.selected_set
                                         .iter()
                                         .filter_map(|&i| tab.entries.get(i))
                                         .map(|entry| entry.path.clone())
@@ -176,17 +177,20 @@ impl AppState {
                                 tab.display_name = display_name_for_path(&tab.path);
                                 tab.entries = e;
                                 tab.error = None;
-                                tab.selected_indices.clear();
+                                tab.clear_selection();
                                 tab.sort_entries();
 
                                 if !saved_paths.is_empty() {
-                                    tab.selected_indices = tab
+                                    let restored: Vec<usize> = tab
                                         .entries
                                         .iter()
                                         .enumerate()
                                         .filter(|(_, entry)| saved_paths.contains(&entry.path))
                                         .map(|(i, _)| i)
                                         .collect();
+                                    for i in restored {
+                                        tab.selected_set.insert(i);
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -200,7 +204,7 @@ impl AppState {
     }
 
     pub fn process_file_op_responses(&mut self, dock: &DockState<Tab>) {
-        while let Ok(resp) = self.file_op_receiver.try_recv() {
+        for resp in self.file_op_rx.try_iter() {
             match resp {
                 FileOpResponse::Success { message } => {
                     self.toasts.success(message);
@@ -268,13 +272,16 @@ pub struct Tab {
     pub sort_column: SortColumn,
     pub sort_ascending: bool,
     pub filter_text: String,
-    pub selected_indices: Vec<usize>,
+    pub selected_set: HashSet<usize>,
     pub last_clicked_index: Option<usize>,
     pub editing_address_bar: bool,
     pub address_bar_text: String,
     pub rename_state: Option<RenameState>,
     pub new_item_mode: Option<NewItemMode>,
     pub new_item_name: String,
+    pub filtered_cache: Vec<usize>,
+    pub filter_dirty: bool,
+    prev_filter_text: String,
 }
 
 impl Tab {
@@ -291,13 +298,16 @@ impl Tab {
             sort_column: SortColumn::Name,
             sort_ascending: true,
             filter_text: String::new(),
-            selected_indices: Vec::new(),
+            selected_set: HashSet::new(),
             last_clicked_index: None,
             editing_address_bar: false,
             address_bar_text: String::new(),
             rename_state: None,
             new_item_mode: None,
             new_item_name: String::new(),
+            filtered_cache: Vec::new(),
+            filter_dirty: true,
+            prev_filter_text: String::new(),
         }
     }
 
@@ -309,8 +319,9 @@ impl Tab {
         self.display_name = display_name_for_path(&self.path);
         self.loading = true;
         self.error = None;
-        self.selected_indices.clear();
+        self.clear_selection();
         self.filter_text.clear();
+        self.filter_dirty = true;
     }
 
     pub fn go_back(&mut self) -> Option<String> {
@@ -321,7 +332,7 @@ impl Tab {
             self.display_name = display_name_for_path(&self.path);
             self.loading = true;
             self.error = None;
-            self.selected_indices.clear();
+            self.clear_selection();
             Some(path)
         } else {
             None
@@ -336,7 +347,7 @@ impl Tab {
             self.display_name = display_name_for_path(&self.path);
             self.loading = true;
             self.error = None;
-            self.selected_indices.clear();
+            self.clear_selection();
             Some(path)
         } else {
             None
@@ -373,15 +384,56 @@ impl Tab {
                 cmp.reverse()
             }
         });
-        self.selected_indices.clear();
+        self.clear_selection();
+        self.filter_dirty = true;
     }
 
     pub fn selected_paths(&self) -> Vec<String> {
-        self.selected_indices
+        self.selected_set
             .iter()
             .filter_map(|&i| self.entries.get(i))
             .map(|e| e.path.clone())
             .collect()
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selected_set.clear();
+        self.last_clicked_index = None;
+    }
+
+    /// Rebuild filtered_cache if filter_text changed or filter_dirty is set.
+    pub fn ensure_filtered(&mut self) {
+        if self.filter_dirty || self.filter_text != self.prev_filter_text {
+            let lower_filter = self.filter_text.to_lowercase();
+            self.filtered_cache = self
+                .entries
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| {
+                    lower_filter.is_empty() || e.name.to_lowercase().contains(&lower_filter)
+                })
+                .map(|(i, _)| i)
+                .collect();
+            self.prev_filter_text = self.filter_text.clone();
+            self.filter_dirty = false;
+        }
+    }
+
+    /// Navigate to next/prev item in filtered list. Returns the original entry index.
+    pub fn next_filtered_index(&self, forward: bool) -> Option<usize> {
+        if self.filtered_cache.is_empty() {
+            return None;
+        }
+        let current_orig = self.selected_set.iter().min().copied();
+        let current_pos = current_orig
+            .and_then(|orig| self.filtered_cache.iter().position(|&i| i == orig))
+            .unwrap_or(0);
+        let next_pos = if forward {
+            (current_pos + 1).min(self.filtered_cache.len() - 1)
+        } else {
+            current_pos.saturating_sub(1)
+        };
+        Some(self.filtered_cache[next_pos])
     }
 }
 

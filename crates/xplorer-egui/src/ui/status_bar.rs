@@ -8,19 +8,8 @@ pub fn show_for_tab(ui: &mut egui::Ui, tab: &Tab) {
     ui.horizontal(|ui| {
         ui.set_min_height(24.0);
         let total = tab.entries.len();
-        let filtered_count = if tab.filter_text.is_empty() {
-            total
-        } else {
-            tab.entries
-                .iter()
-                .filter(|e| {
-                    e.name
-                        .to_lowercase()
-                        .contains(&tab.filter_text.to_lowercase())
-                })
-                .count()
-        };
-        let selected_count = tab.selected_indices.len();
+        let filtered_count = tab.filtered_cache.len();
+        let selected_count = tab.selected_set.len();
 
         if !tab.filter_text.is_empty() {
             ui.label(
@@ -38,7 +27,7 @@ pub fn show_for_tab(ui: &mut egui::Ui, tab: &Tab) {
 
         if selected_count > 0 {
             let selected_size: u64 = tab
-                .selected_indices
+                .selected_set
                 .iter()
                 .filter_map(|&i| tab.entries.get(i))
                 .filter(|e| !e.is_dir)

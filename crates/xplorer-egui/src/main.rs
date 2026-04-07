@@ -28,8 +28,9 @@ impl XplorerApp {
         theme::setup_fonts(&cc.egui_ctx);
 
         let (req_tx, req_rx) = mpsc::channel();
-        let (resp_tx, resp_rx) = mpsc::channel();
         let (file_op_tx, file_op_rx) = mpsc::channel();
+
+        let (resp_tx, resp_rx) = mpsc::channel();
         let (file_op_resp_tx, file_op_resp_rx) = mpsc::channel();
 
         worker::spawn_directory_worker(req_rx, resp_tx, cc.egui_ctx.clone());
@@ -219,8 +220,8 @@ impl XplorerApp {
             }
             if ctx.input(|i| i.key_pressed(egui::Key::F2)) {
                 if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
-                    if tab.selected_indices.len() == 1 {
-                        let idx = tab.selected_indices[0];
+                    if tab.selected_set.len() == 1 {
+                        let idx = *tab.selected_set.iter().next().unwrap();
                         if let Some(entry) = tab.entries.get(idx) {
                             let name = entry.name.clone();
                             tab.rename_state = Some(state::RenameState {
@@ -233,7 +234,7 @@ impl XplorerApp {
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 if let Some(tab) = focused_tab(&self.dock_state) {
-                    if let Some(&idx) = tab.selected_indices.first() {
+                    if let Some(&idx) = tab.selected_set.iter().next() {
                         if let Some(entry) = tab.entries.get(idx) {
                             let path = entry.path.clone();
                             let is_dir = entry.is_dir;
@@ -252,23 +253,28 @@ impl XplorerApp {
             }
             if ctx.input(|i| i.key_pressed(egui::Key::A) && i.modifiers.ctrl) {
                 if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
-                    tab.selected_indices = (0..tab.entries.len()).collect();
+                    tab.ensure_filtered();
+                    tab.selected_set = tab.filtered_cache.iter().copied().collect();
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown) && !i.modifiers.alt) {
                 if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
-                    let current = tab.selected_indices.first().copied().unwrap_or(0);
-                    let next = (current + 1).min(tab.entries.len().saturating_sub(1));
-                    tab.selected_indices = vec![next];
-                    tab.last_clicked_index = Some(next);
+                    tab.ensure_filtered();
+                    if let Some(next_orig) = tab.next_filtered_index(true) {
+                        tab.selected_set.clear();
+                        tab.selected_set.insert(next_orig);
+                        tab.last_clicked_index = Some(next_orig);
+                    }
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) && !i.modifiers.alt) {
                 if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
-                    let current = tab.selected_indices.first().copied().unwrap_or(0);
-                    let prev = current.saturating_sub(1);
-                    tab.selected_indices = vec![prev];
-                    tab.last_clicked_index = Some(prev);
+                    tab.ensure_filtered();
+                    if let Some(prev_orig) = tab.next_filtered_index(false) {
+                        tab.selected_set.clear();
+                        tab.selected_set.insert(prev_orig);
+                        tab.last_clicked_index = Some(prev_orig);
+                    }
                 }
             }
         }
