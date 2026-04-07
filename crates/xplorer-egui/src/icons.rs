@@ -8,7 +8,6 @@ pub const DESKTOP: &str = regular::DESKTOP;
 pub const DOCUMENTS: &str = regular::FILE_TEXT;
 pub const DOWNLOADS: &str = regular::DOWNLOAD;
 pub const DRIVE: &str = regular::HARD_DRIVES;
-pub const STAR: &str = regular::STAR;
 pub const BOOKMARK: &str = regular::BOOKMARK_SIMPLE;
 
 pub const ARROW_LEFT: &str = regular::ARROW_LEFT;
@@ -17,7 +16,6 @@ pub const ARROW_UP: &str = regular::ARROW_UP;
 pub const BREADCRUMB_SEP: &str = regular::CARET_RIGHT;
 
 pub const CLOSE: &str = regular::X;
-pub const PLUS: &str = regular::PLUS;
 pub const FILTER: &str = regular::FUNNEL;
 pub const FOLDER: &str = regular::FOLDER;
 pub const FILE_GENERIC: &str = regular::FILE;

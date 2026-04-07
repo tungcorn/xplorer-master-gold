@@ -9,7 +9,11 @@ use notify_debouncer_full::new_debouncer;
 use crate::state::DirRequest;
 
 pub enum WatchCommand {
-    Watch { tab_id: usize, path: String },
+    Watch {
+        tab_id: usize,
+        path: String,
+    },
+    #[allow(dead_code)]
     Stop,
 }
 

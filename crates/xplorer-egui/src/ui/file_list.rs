@@ -2,7 +2,6 @@ use std::path::Path;
 
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
-use xplorer_core::types::FileEntry;
 
 use crate::icons;
 use crate::state::{AppState, NewItemMode, SortColumn, Tab};
@@ -31,17 +30,8 @@ pub fn show_for_tab(
         return;
     }
 
-    let filtered: Vec<(usize, &FileEntry)> = tab
-        .entries
-        .iter()
-        .enumerate()
-        .filter(|(_, e)| {
-            tab.filter_text.is_empty()
-                || e.name
-                    .to_lowercase()
-                    .contains(&tab.filter_text.to_lowercase())
-        })
-        .collect();
+    tab.ensure_filtered();
+    let filtered = &tab.filtered_cache;
 
     if filtered.is_empty() && tab.filter_text.is_empty() {
         ui.centered_and_justified(|ui| {
@@ -52,7 +42,7 @@ pub fn show_for_tab(
 
     let sort_col = tab.sort_column;
     let sort_asc = tab.sort_ascending;
-    let selected = tab.selected_indices.clone();
+    let selected = tab.selected_set.clone();
     let has_clipboard = state.clipboard.is_some();
     let rename_idx = tab.rename_state.as_ref().map(|r| r.entry_index);
 
@@ -130,13 +120,14 @@ pub fn show_for_tab(
         .body(|body| {
             body.rows(row_height, filtered.len(), |mut row| {
                 let idx = row.index();
-                let (original_idx, entry) = &filtered[idx];
-                let is_selected = selected.contains(original_idx);
+                let original_idx = filtered[idx];
+                let entry = &tab.entries[original_idx];
+                let is_selected = selected.contains(&original_idx);
 
                 row.set_selected(is_selected);
 
                 let (_, name_resp) = row.col(|ui| {
-                    if rename_idx == Some(*original_idx) {
+                    if rename_idx == Some(original_idx) {
                         if let Some(ref mut rs) = tab.rename_state {
                             let response = ui.text_edit_singleline(&mut rs.new_name);
                             if !response.has_focus() {
@@ -218,7 +209,7 @@ pub fn show_for_tab(
                     file_ctx_action = Some((ctx_action, entry.path.clone(), entry.is_dir));
                 }
 
-                if rename_idx != Some(*original_idx) {
+                if rename_idx != Some(original_idx) {
                     if interact.middle_clicked() && entry.is_dir {
                         middle_click_split = Some(entry.path.clone());
                     } else if interact.double_clicked() {
@@ -232,7 +223,7 @@ pub fn show_for_tab(
                     } else if interact.clicked() {
                         let modifiers = interact.ctx.input(|i| i.modifiers);
                         selection_action = Some(SelectionAction {
-                            index: *original_idx,
+                            index: original_idx,
                             ctrl: modifiers.ctrl || modifiers.mac_cmd,
                             shift: modifiers.shift,
                         });
@@ -328,19 +319,21 @@ fn apply_selection(tab: &mut Tab, action: SelectionAction) {
         if let Some(anchor) = tab.last_clicked_index {
             let start = anchor.min(action.index);
             let end = anchor.max(action.index);
-            tab.selected_indices = (start..=end).collect();
+            tab.selected_set = (start..=end).collect();
         } else {
-            tab.selected_indices = vec![action.index];
+            tab.selected_set.clear();
+            tab.selected_set.insert(action.index);
         }
     } else if action.ctrl {
-        if let Some(pos) = tab.selected_indices.iter().position(|&i| i == action.index) {
-            tab.selected_indices.remove(pos);
+        if tab.selected_set.contains(&action.index) {
+            tab.selected_set.remove(&action.index);
         } else {
-            tab.selected_indices.push(action.index);
+            tab.selected_set.insert(action.index);
         }
         tab.last_clicked_index = Some(action.index);
     } else {
-        tab.selected_indices = vec![action.index];
+        tab.selected_set.clear();
+        tab.selected_set.insert(action.index);
         tab.last_clicked_index = Some(action.index);
     }
 }
@@ -494,9 +487,7 @@ fn handle_file_context_action(
                         .map(|p| p.to_string_lossy().to_string())
                         .unwrap_or_default()
                 };
-                let _ = std::process::Command::new("cmd")
-                    .args(["/c", "start", "cmd", "/k", &format!("cd /d {}", dir)])
-                    .spawn();
+                open_terminal_at(&dir);
             }
         }
         FileContextAction::Copy => state.do_copy(tab),
@@ -537,15 +528,7 @@ fn handle_empty_area_action(
         EmptyAreaAction::OpenInTerminal => {
             #[cfg(windows)]
             {
-                let _ = std::process::Command::new("cmd")
-                    .args([
-                        "/c",
-                        "start",
-                        "cmd",
-                        "/k",
-                        &format!("cd /d {}", current_path),
-                    ])
-                    .spawn();
+                open_terminal_at(current_path);
             }
         }
         EmptyAreaAction::NewFolder => {
@@ -597,4 +580,17 @@ fn show_new_item_input(
         }
     });
     ui.add_space(4.0);
+}
+
+#[cfg(windows)]
+fn open_terminal_at(dir: &str) {
+    if std::process::Command::new("wt")
+        .args(["-d", dir])
+        .spawn()
+        .is_err()
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/c", "start", "cmd", "/k", &format!("cd /d {}", dir)])
+            .spawn();
+    }
 }
