@@ -27,20 +27,12 @@ pub enum EmptyAreaAction {
 }
 
 fn menu_item(ui: &mut egui::Ui, label: &str, shortcut: Option<&str>) -> bool {
-    let desired_width = ui.available_width().max(180.0);
-    let response = ui.allocate_ui_with_layout(
-        egui::vec2(desired_width, 0.0),
-        egui::Layout::left_to_right(egui::Align::Center),
-        |ui| {
-            ui.label(label);
-            if let Some(sc) = shortcut {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(egui::RichText::new(sc).color(theme::MUTED).size(12.0));
-                });
-            }
-        },
-    );
-    response.response.interact(egui::Sense::click()).clicked()
+    let mut btn = egui::Button::new(label).frame(false);
+    if let Some(sc) = shortcut {
+        btn = btn.shortcut_text(egui::RichText::new(sc).color(theme::MUTED).size(12.0));
+    }
+    ui.add_sized([ui.available_width().max(180.0), 0.0], btn)
+        .clicked()
 }
 
 pub fn file_context_menu(
