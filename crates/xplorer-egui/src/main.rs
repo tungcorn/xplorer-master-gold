@@ -106,6 +106,22 @@ impl XplorerApp {
             }
             return;
         }
+        if self.state.search.open {
+            return;
+        }
+        if self.state.properties_dialog.is_some() {
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.state.properties_dialog = None;
+            }
+            return;
+        }
+
+        if ctx.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.ctrl && i.modifiers.shift) {
+            if let Some(tab) = focused_tab(&self.dock_state) {
+                self.state.search.open_at(&tab.path);
+            }
+            return;
+        }
 
         let text_focused = ctx.wants_keyboard_input();
 
@@ -353,6 +369,16 @@ impl XplorerApp {
                         tab.selected_set.insert(prev_orig);
                         tab.last_clicked_index = Some(prev_orig);
                         tab.scroll_to_row = Some(prev_orig);
+                    }
+                }
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.alt) {
+                if let Some(tab) = focused_tab(&self.dock_state) {
+                    if let Some(&idx) = tab.selected_set.iter().next() {
+                        if let Some(entry) = tab.entries.get(idx) {
+                            self.state.properties_dialog =
+                                Some(ui::properties_dialog::PropertiesDialog::open(&entry.path));
+                        }
                     }
                 }
             }
@@ -633,6 +659,22 @@ impl eframe::App for XplorerApp {
         }
 
         ui::shortcut_overlay::show(ctx, &mut self.state.shortcut_overlay);
+
+        if let Some(search_action) = ui::search_panel::show(ctx, &mut self.state.search) {
+            match search_action {
+                ui::search_panel::SearchAction::NavigateTo(path) => {
+                    if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                        self.state.navigate_tab(tab, &path);
+                    }
+                    self.state.update_watcher(&self.dock_state);
+                }
+                ui::search_panel::SearchAction::OpenFile(path) => {
+                    let _ = xplorer_core::system::open_file(std::path::Path::new(&path));
+                }
+            }
+        }
+
+        ui::properties_dialog::show(ctx, &mut self.state.properties_dialog);
 
         let mut dismiss_dialog = false;
         let mut do_permanent_delete = false;

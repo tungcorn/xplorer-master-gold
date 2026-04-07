@@ -15,6 +15,7 @@ pub enum FileContextAction {
     MoveToTrash,
     Rename,
     AddToFavorites,
+    Properties,
 }
 
 pub enum EmptyAreaAction {
@@ -88,6 +89,11 @@ pub fn file_context_menu(
         }
         if is_dir && menu_item(ui, "Add to Favorites", None) {
             action = FileContextAction::AddToFavorites;
+            ui.close_menu();
+        }
+        ui.separator();
+        if menu_item(ui, "Properties", Some("Alt+Enter")) {
+            action = FileContextAction::Properties;
             ui.close_menu();
         }
     });

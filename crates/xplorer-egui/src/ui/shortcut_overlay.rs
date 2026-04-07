@@ -50,6 +50,7 @@ const GROUPS: &[ShortcutGroup] = &[
             ("F2", "Rename"),
             ("Del", "Move to Trash"),
             ("Shift+Del", "Delete permanently"),
+            ("Alt+Enter", "Properties"),
         ],
     },
     ShortcutGroup {
@@ -65,6 +66,7 @@ const GROUPS: &[ShortcutGroup] = &[
         title: "View & Search",
         items: &[
             ("Ctrl+F", "Filter current listing"),
+            ("Ctrl+Shift+F", "Deep search"),
             ("Ctrl+H", "Toggle hidden files"),
             ("Ctrl+K", "Command palette"),
             ("Ctrl+1", "Details view"),

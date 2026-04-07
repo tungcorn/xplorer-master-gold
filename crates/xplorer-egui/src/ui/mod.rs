@@ -4,6 +4,8 @@ pub mod dock_viewer;
 pub mod file_list;
 pub mod preview_panel;
 pub mod progress_panel;
+pub mod properties_dialog;
+pub mod search_panel;
 pub mod shortcut_overlay;
 pub mod sidebar;
 pub mod status_bar;

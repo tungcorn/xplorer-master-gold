@@ -7,6 +7,8 @@ use egui_dock::DockState;
 use xplorer_core::types::{Bookmark, DriveInfo, FileEntry};
 
 use crate::ui::command_palette::CommandPaletteState;
+use crate::ui::properties_dialog::PropertiesDialog;
+use crate::ui::search_panel::SearchState;
 use crate::ui::shortcut_overlay::ShortcutOverlayState;
 use crate::watcher::WatchCommand;
 
@@ -28,6 +30,8 @@ pub struct AppState {
     pub command_palette: CommandPaletteState,
     pub shortcut_overlay: ShortcutOverlayState,
     pub active_operations: Vec<OperationProgress>,
+    pub properties_dialog: Option<PropertiesDialog>,
+    pub search: SearchState,
     next_op_id: u64,
 }
 
@@ -57,6 +61,8 @@ impl AppState {
             command_palette: CommandPaletteState::default(),
             shortcut_overlay: ShortcutOverlayState::default(),
             active_operations: Vec::new(),
+            properties_dialog: None,
+            search: SearchState::default(),
             next_op_id: 1,
         }
     }
@@ -276,12 +282,8 @@ impl AppState {
 
     pub fn update_watcher(&self, dock: &DockState<Tab>) {
         if let Some(ref sender) = self.watcher_sender {
-            if let Some(tab) = focused_tab(dock) {
-                let _ = sender.send(WatchCommand::Watch {
-                    tab_id: tab.id,
-                    path: tab.path.clone(),
-                });
-            }
+            let tabs = all_tab_ids_and_paths(dock);
+            let _ = sender.send(WatchCommand::WatchAll { tabs });
         }
     }
 }
@@ -325,6 +327,18 @@ pub fn all_tab_paths(dock: &DockState<Tab>) -> Vec<String> {
         }
     }
     paths
+}
+
+pub fn all_tab_ids_and_paths(dock: &DockState<Tab>) -> Vec<(usize, String)> {
+    let mut result = Vec::new();
+    for (_surface_index, node) in dock.iter_all_nodes() {
+        if let Some(tabs) = node.tabs() {
+            for tab in tabs {
+                result.push((tab.id, tab.path.clone()));
+            }
+        }
+    }
+    result
 }
 
 pub struct Tab {

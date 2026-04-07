@@ -711,6 +711,10 @@ fn handle_file_context_action(
                 });
             }
         }
+        FileContextAction::Properties => {
+            state.properties_dialog =
+                Some(crate::ui::properties_dialog::PropertiesDialog::open(path));
+        }
         FileContextAction::None => {}
     }
 }
