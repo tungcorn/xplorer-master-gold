@@ -5,7 +5,7 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 
 use crate::icons;
-use crate::state::{AppState, ClipboardOp, NewItemMode, SortColumn, Tab};
+use crate::state::{AppState, ClipboardOp, NewItemMode, SortColumn, Tab, ViewMode};
 use crate::theme;
 use crate::ui::context_menu::{self, EmptyAreaAction, FileContextAction};
 use crate::ui::dock_viewer::ViewerAction;
@@ -41,6 +41,19 @@ pub fn show_for_tab(
         return;
     }
 
+    match tab.view_mode {
+        ViewMode::Details => show_details_view(ui, tab, state, actions),
+        ViewMode::Grid => show_grid_view(ui, tab, state, actions),
+    }
+}
+
+fn show_details_view(
+    ui: &mut egui::Ui,
+    tab: &mut Tab,
+    state: &mut AppState,
+    actions: &mut Vec<ViewerAction>,
+) {
+    let filtered = &tab.filtered_cache;
     let sort_col = tab.sort_column;
     let sort_asc = tab.sort_ascending;
     let selected = tab.selected_set.clone();
@@ -303,6 +316,159 @@ pub fn show_for_tab(
 
     if let Some((old_path, new_name)) = rename_commit {
         state.do_rename(old_path, new_name);
+    }
+}
+
+fn show_grid_view(
+    ui: &mut egui::Ui,
+    tab: &mut Tab,
+    state: &mut AppState,
+    actions: &mut Vec<ViewerAction>,
+) {
+    let filtered = tab.filtered_cache.clone();
+    let selected = tab.selected_set.clone();
+    let has_clipboard = state.clipboard.is_some();
+    let cut_paths: HashSet<String> = state
+        .clipboard
+        .as_ref()
+        .filter(|cb| cb.operation == ClipboardOp::Cut)
+        .map(|cb| cb.paths.iter().cloned().collect())
+        .unwrap_or_default();
+
+    let mut selection_action: Option<SelectionAction> = None;
+    let mut double_click_action: Option<DoubleClickAction> = None;
+    let mut file_ctx_action: Option<(FileContextAction, String, bool)> = None;
+    let mut right_click_select: Option<usize> = None;
+    let mut any_item_interacted = false;
+
+    let cell_width = 88.0_f32;
+    let cell_height = 88.0_f32;
+
+    let empty_area_resp = ui.interact(
+        ui.available_rect_before_wrap(),
+        egui::Id::new(("grid_empty_bg", tab.id)),
+        egui::Sense::hover(),
+    );
+
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        ui.add_space(4.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
+
+            for &original_idx in &filtered {
+                let entry = &tab.entries[original_idx];
+                let is_selected = selected.contains(&original_idx);
+                let is_cut = cut_paths.contains(&entry.path);
+
+                let (rect, resp) = ui
+                    .allocate_exact_size(egui::vec2(cell_width, cell_height), egui::Sense::click());
+
+                let bg = if is_selected {
+                    theme::HOVER
+                } else if resp.hovered() {
+                    egui::Color32::from_rgba_premultiplied(47, 51, 57, 80)
+                } else {
+                    egui::Color32::TRANSPARENT
+                };
+                ui.painter().rect_filled(rect, 4.0, bg);
+
+                let ext = Path::new(&entry.name)
+                    .extension()
+                    .map(|e| e.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let (icon, icon_color) = icons::file_icon(&ext, entry.is_dir);
+
+                let icon_c = if is_cut {
+                    egui::Color32::from_rgba_premultiplied(
+                        icon_color.r(),
+                        icon_color.g(),
+                        icon_color.b(),
+                        100,
+                    )
+                } else {
+                    icon_color
+                };
+                let name_color = if is_cut { theme::MUTED } else { theme::TEXT };
+
+                ui.painter().text(
+                    rect.center_top() + egui::vec2(0.0, 28.0),
+                    egui::Align2::CENTER_CENTER,
+                    icon,
+                    egui::FontId::proportional(26.0),
+                    icon_c,
+                );
+
+                let name_galley = ui.painter().layout(
+                    entry.name.clone(),
+                    egui::FontId::proportional(10.0),
+                    name_color,
+                    cell_width - 6.0,
+                );
+                let name_pos = rect.center_top() + egui::vec2(0.0, 52.0);
+                let name_rect = egui::Align2::CENTER_TOP.anchor_size(name_pos, name_galley.size());
+                ui.painter().galley(name_rect.min, name_galley, name_color);
+
+                if resp.hovered() {
+                    any_item_interacted = true;
+                    resp.clone().on_hover_text(&entry.name);
+                }
+
+                let ctx_action =
+                    context_menu::file_context_menu(&resp, entry.is_dir, has_clipboard);
+                if !matches!(ctx_action, FileContextAction::None) {
+                    file_ctx_action = Some((ctx_action, entry.path.clone(), entry.is_dir));
+                    any_item_interacted = true;
+                }
+
+                if resp.secondary_clicked() && !is_selected {
+                    right_click_select = Some(original_idx);
+                }
+
+                if resp.double_clicked() {
+                    if entry.is_dir {
+                        double_click_action =
+                            Some(DoubleClickAction::NavigateDir(entry.path.clone()));
+                    } else {
+                        double_click_action = Some(DoubleClickAction::OpenFile(entry.path.clone()));
+                    }
+                } else if resp.clicked() {
+                    let modifiers = resp.ctx.input(|i| i.modifiers);
+                    selection_action = Some(SelectionAction {
+                        index: original_idx,
+                        ctrl: modifiers.ctrl || modifiers.mac_cmd,
+                        shift: modifiers.shift,
+                    });
+                }
+            }
+        });
+    });
+
+    if let Some(action) = selection_action {
+        apply_selection(tab, action);
+    }
+    if let Some(idx) = right_click_select {
+        tab.selected_set.clear();
+        tab.selected_set.insert(idx);
+        tab.last_clicked_index = Some(idx);
+    }
+
+    match double_click_action {
+        Some(DoubleClickAction::NavigateDir(path)) => {
+            actions.push(ViewerAction::Navigate(path));
+        }
+        Some(DoubleClickAction::OpenFile(path)) => {
+            let _ = xplorer_core::system::open_file(Path::new(&path));
+        }
+        None => {}
+    }
+
+    if let Some((action, path, is_dir)) = file_ctx_action {
+        handle_file_context_action(tab, state, actions, action, &path, is_dir);
+    } else if !any_item_interacted {
+        let current_path = tab.path.clone();
+        let has_clipboard = state.clipboard.is_some();
+        let empty_action = context_menu::empty_area_context_menu(&empty_area_resp, has_clipboard);
+        handle_empty_area_action(tab, state, actions, empty_action, &current_path);
     }
 }
 

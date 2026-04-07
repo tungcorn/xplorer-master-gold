@@ -5,6 +5,8 @@ use std::path::PathBuf;
 pub struct Session {
     pub tabs: Vec<TabSession>,
     pub show_sidebar: bool,
+    #[serde(default)]
+    pub show_preview: bool,
 }
 
 #[derive(Serialize, Deserialize)]

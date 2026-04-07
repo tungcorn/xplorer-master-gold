@@ -10,6 +10,7 @@ use eframe::egui;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex, TabIndex};
 use state::{all_tab_paths, focused_tab, focused_tab_mut, AppState, Tab};
 use std::sync::mpsc;
+use ui::command_palette::PaletteAction;
 use ui::dock_viewer::{ViewerAction, XplorerTabViewer};
 use ui::sidebar::SidebarAction;
 
@@ -33,19 +34,26 @@ impl XplorerApp {
 
         let (resp_tx, resp_rx) = mpsc::channel();
         let (file_op_resp_tx, file_op_resp_rx) = mpsc::channel();
+        let (progress_tx, progress_rx) = mpsc::channel();
 
         worker::spawn_directory_worker(req_rx, resp_tx, cc.egui_ctx.clone());
-        worker::spawn_file_op_worker(file_op_rx, file_op_resp_tx, cc.egui_ctx.clone());
+        worker::spawn_file_op_worker(
+            file_op_rx,
+            file_op_resp_tx,
+            progress_tx.clone(),
+            cc.egui_ctx.clone(),
+        );
 
         let drives = xplorer_core::system::list_drives().unwrap_or_default();
         let bookmarks = xplorer_core::bookmarks::get_bookmarks().unwrap_or_default();
 
-        let mut state = AppState::new(req_tx, resp_rx, file_op_tx, file_op_resp_rx);
+        let mut state = AppState::new(req_tx, resp_rx, file_op_tx, file_op_resp_rx, progress_rx);
         state.drives = drives;
         state.bookmarks = bookmarks;
 
         let dock_state = if let Some(saved) = session::load() {
             state.show_sidebar = saved.show_sidebar;
+            state.show_preview = saved.show_preview;
             let tabs: Vec<Tab> = saved
                 .tabs
                 .iter()
@@ -85,6 +93,20 @@ impl XplorerApp {
     }
 
     fn process_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.key_pressed(egui::Key::K) && i.modifiers.ctrl) {
+            self.state.command_palette.toggle();
+            return;
+        }
+        if self.state.command_palette.open {
+            return;
+        }
+        if self.state.shortcut_overlay.open {
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.state.shortcut_overlay.open = false;
+            }
+            return;
+        }
+
         let text_focused = ctx.wants_keyboard_input();
 
         if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl) {
@@ -217,6 +239,19 @@ impl XplorerApp {
                 tab.filter_dirty = true;
             }
         }
+        if ctx.input(|i| i.key_pressed(egui::Key::P) && i.modifiers.ctrl) {
+            self.state.show_preview = !self.state.show_preview;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Num1) && i.modifiers.ctrl) {
+            if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                tab.view_mode = state::ViewMode::Details;
+            }
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Num2) && i.modifiers.ctrl) {
+            if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                tab.view_mode = state::ViewMode::Grid;
+            }
+        }
         if ctx.input(|i| i.key_pressed(egui::Key::F5)) {
             if let Some(tab) = focused_tab(&self.dock_state) {
                 self.state.request_load(tab.id, tab.path.clone());
@@ -285,6 +320,14 @@ impl XplorerApp {
                     }
                 }
             }
+            let has_question_mark = ctx.input(|i| {
+                i.events
+                    .iter()
+                    .any(|e| matches!(e, egui::Event::Text(t) if t == "?"))
+            });
+            if has_question_mark {
+                self.state.shortcut_overlay.open = true;
+            }
             if ctx.input(|i| i.key_pressed(egui::Key::A) && i.modifiers.ctrl) {
                 if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
                     tab.ensure_filtered();
@@ -312,6 +355,160 @@ impl XplorerApp {
                         tab.scroll_to_row = Some(prev_orig);
                     }
                 }
+            }
+        }
+    }
+
+    fn handle_palette_action(&mut self, action: PaletteAction) {
+        match action {
+            PaletteAction::ToggleSidebar => {
+                self.state.show_sidebar = !self.state.show_sidebar;
+            }
+            PaletteAction::TogglePreview => {
+                self.state.show_preview = !self.state.show_preview;
+            }
+            PaletteAction::ToggleHiddenFiles => {
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    tab.show_hidden = !tab.show_hidden;
+                    tab.filter_dirty = true;
+                }
+            }
+            PaletteAction::NewTab => {
+                let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
+                let home_str = home.to_string_lossy().to_string();
+                let tab = self.state.create_tab(&home_str);
+                self.state.request_load(tab.id, home_str);
+                self.dock_state.push_to_focused_leaf(tab);
+            }
+            PaletteAction::CloseTab => {
+                if let Some((surface, node)) = self.dock_state.focused_leaf() {
+                    let tab_to_remove = {
+                        let node_ref = &self.dock_state[surface][node];
+                        match node_ref {
+                            egui_dock::Node::Leaf { tabs, active, .. } => {
+                                if tabs.len() > 1 || self.dock_state.main_surface().num_tabs() > 1 {
+                                    Some(*active)
+                                } else {
+                                    None
+                                }
+                            }
+                            _ => None,
+                        }
+                    };
+                    if let Some(active) = tab_to_remove {
+                        self.dock_state.remove_tab((surface, node, active));
+                    }
+                }
+            }
+            PaletteAction::GoBack => {
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    self.state.go_back_tab(tab);
+                }
+                self.state.update_watcher(&self.dock_state);
+            }
+            PaletteAction::GoForward => {
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    self.state.go_forward_tab(tab);
+                }
+                self.state.update_watcher(&self.dock_state);
+            }
+            PaletteAction::GoUp => {
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    self.state.go_up_tab(tab);
+                }
+                self.state.update_watcher(&self.dock_state);
+            }
+            PaletteAction::GoHome => {
+                let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
+                let home_str = home.to_string_lossy().to_string();
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    self.state.navigate_tab(tab, &home_str);
+                }
+                self.state.update_watcher(&self.dock_state);
+            }
+            PaletteAction::Refresh => {
+                if let Some(tab) = focused_tab(&self.dock_state) {
+                    self.state.refresh_tab(tab);
+                }
+            }
+            PaletteAction::FocusFilter => {
+                self.state.focus_filter = true;
+            }
+            PaletteAction::EditAddressBar => {
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    tab.editing_address_bar = true;
+                    tab.address_bar_text = tab.path.clone();
+                }
+            }
+            PaletteAction::SplitRight => {
+                if let Some((surface, node)) = self.dock_state.focused_leaf() {
+                    let path = focused_tab(&self.dock_state)
+                        .map(|t| t.path.clone())
+                        .unwrap_or_default();
+                    let new_tab = self.state.create_tab(&path);
+                    self.state.request_load(new_tab.id, path);
+                    self.dock_state.split(
+                        (surface, node),
+                        egui_dock::Split::Right,
+                        0.5,
+                        egui_dock::Node::leaf(new_tab),
+                    );
+                    self.state.update_watcher(&self.dock_state);
+                }
+            }
+            PaletteAction::CopySelection => {
+                if let Some(tab) = focused_tab(&self.dock_state) {
+                    self.state.do_copy(tab);
+                }
+            }
+            PaletteAction::CutSelection => {
+                if let Some(tab) = focused_tab(&self.dock_state) {
+                    self.state.do_cut(tab);
+                }
+            }
+            PaletteAction::PasteClipboard => {
+                if let Some(tab) = focused_tab(&self.dock_state) {
+                    self.state.do_paste(tab);
+                }
+            }
+            PaletteAction::Rename => {
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    if tab.selected_set.len() == 1 {
+                        let idx = *tab.selected_set.iter().next().unwrap();
+                        if let Some(entry) = tab.entries.get(idx) {
+                            let name = entry.name.clone();
+                            tab.rename_state = Some(state::RenameState {
+                                entry_index: idx,
+                                new_name: name,
+                            });
+                        }
+                    }
+                }
+            }
+            PaletteAction::MoveToTrash => {
+                if let Some(tab) = focused_tab(&self.dock_state) {
+                    self.state.do_delete(tab, true);
+                }
+            }
+            PaletteAction::DeletePermanently => {
+                if let Some(tab) = focused_tab(&self.dock_state) {
+                    let paths = tab.selected_paths();
+                    if !paths.is_empty() {
+                        self.confirm_delete = Some(ConfirmDelete { paths });
+                    }
+                }
+            }
+            PaletteAction::SelectAll => {
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    tab.ensure_filtered();
+                    tab.selected_set = tab.filtered_cache.iter().copied().collect();
+                }
+            }
+            PaletteAction::NavigateTo(path) => {
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    self.state.navigate_tab(tab, &path);
+                }
+                self.state.update_watcher(&self.dock_state);
             }
         }
     }
@@ -368,6 +565,7 @@ impl eframe::App for XplorerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state.process_responses(&mut self.dock_state);
         self.state.process_file_op_responses(&self.dock_state);
+        self.state.process_progress();
         self.process_keyboard_shortcuts(ctx);
 
         let title = focused_tab(&self.dock_state)
@@ -428,6 +626,14 @@ impl eframe::App for XplorerApp {
 
         self.state.toasts.show(ctx);
 
+        ui::progress_panel::show(ctx, &self.state.active_operations);
+
+        if let Some(action) = ui::command_palette::show(ctx, &mut self.state.command_palette) {
+            self.handle_palette_action(action);
+        }
+
+        ui::shortcut_overlay::show(ctx, &mut self.state.shortcut_overlay);
+
         let mut dismiss_dialog = false;
         let mut do_permanent_delete = false;
         if let Some(ref dialog) = self.confirm_delete {
@@ -461,12 +667,17 @@ impl eframe::App for XplorerApp {
                     .state
                     .file_op_sender
                     .send(state::FileOpRequest::Delete {
+                        id: 0,
                         paths: dialog.paths,
                         to_trash: false,
                     });
             }
         } else if dismiss_dialog || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.confirm_delete = None;
+        }
+
+        if !self.state.active_operations.is_empty() {
+            ctx.request_repaint();
         }
     }
 
@@ -478,6 +689,7 @@ impl eframe::App for XplorerApp {
         let sess = session::Session {
             tabs,
             show_sidebar: self.state.show_sidebar,
+            show_preview: self.state.show_preview,
         };
         session::save(&sess);
     }

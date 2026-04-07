@@ -2,7 +2,8 @@ use eframe::egui;
 use egui_dock::{NodeIndex, SurfaceIndex, TabViewer};
 
 use crate::state::{AppState, Tab};
-use crate::ui::{file_list, status_bar, top_bar};
+use crate::theme;
+use crate::ui::{file_list, preview_panel, status_bar, top_bar};
 
 pub enum ViewerAction {
     Navigate(String),
@@ -38,6 +39,26 @@ impl<'a> TabViewer for XplorerTabViewer<'a> {
             .show_inside(ui, |ui| {
                 status_bar::show_for_tab(ui, tab);
             });
+
+        if self.state.show_preview {
+            egui::SidePanel::right(egui::Id::new(("tab_preview", tab.id)))
+                .default_width(preview_panel::PREVIEW_PANEL_WIDTH)
+                .width_range(200.0..=500.0)
+                .resizable(true)
+                .frame(
+                    egui::Frame::side_top_panel(ui.style())
+                        .fill(theme::SURFACE)
+                        .inner_margin(egui::Margin {
+                            left: 12,
+                            right: 12,
+                            top: 0,
+                            bottom: 0,
+                        }),
+                )
+                .show_inside(ui, |ui| {
+                    preview_panel::show_for_tab(ui, tab);
+                });
+        }
 
         top_bar::show_for_tab(ui, tab, self.state, &mut self.actions);
         ui.separator();

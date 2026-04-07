@@ -3,7 +3,7 @@ use std::sync::mpsc;
 
 use eframe::egui;
 
-use crate::state::{DirRequest, DirResponse, FileOpRequest, FileOpResponse};
+use crate::state::{DirRequest, DirResponse, FileOpProgress, FileOpRequest, FileOpResponse};
 
 pub fn spawn_directory_worker(
     receiver: mpsc::Receiver<DirRequest>,
@@ -31,13 +31,19 @@ pub fn spawn_directory_worker(
 pub fn spawn_file_op_worker(
     receiver: mpsc::Receiver<FileOpRequest>,
     sender: mpsc::Sender<FileOpResponse>,
+    progress_sender: mpsc::Sender<FileOpProgress>,
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
         while let Ok(request) = receiver.recv() {
             let response = match request {
-                FileOpRequest::Copy { sources, dest_dir } => run_batch(
+                FileOpRequest::Copy {
+                    id,
+                    sources,
+                    dest_dir,
+                } => run_batch_with_progress(
+                    id,
                     &sources,
                     |src| {
                         let name = file_name_of(src);
@@ -50,8 +56,16 @@ pub fn spawn_file_op_worker(
                         }
                     },
                     "Copied",
+                    "Copying",
+                    &progress_sender,
+                    &ctx,
                 ),
-                FileOpRequest::Move { sources, dest_dir } => run_batch(
+                FileOpRequest::Move {
+                    id,
+                    sources,
+                    dest_dir,
+                } => run_batch_with_progress(
+                    id,
                     &sources,
                     |src| {
                         let name = file_name_of(src);
@@ -59,8 +73,16 @@ pub fn spawn_file_op_worker(
                         xplorer_core::file_ops::move_entry(Path::new(src), &dest)
                     },
                     "Moved",
+                    "Moving",
+                    &progress_sender,
+                    &ctx,
                 ),
-                FileOpRequest::Delete { paths, to_trash } => run_batch(
+                FileOpRequest::Delete {
+                    id,
+                    paths,
+                    to_trash,
+                } => run_batch_with_progress(
+                    id,
                     &paths,
                     |p| {
                         let path = Path::new(p);
@@ -73,6 +95,9 @@ pub fn spawn_file_op_worker(
                         }
                     },
                     if to_trash { "Trashed" } else { "Deleted" },
+                    if to_trash { "Trashing" } else { "Deleting" },
+                    &progress_sender,
+                    &ctx,
                 ),
                 FileOpRequest::Rename { old_path, new_path } => {
                     match xplorer_core::file_ops::rename(Path::new(&old_path), Path::new(&new_path))
@@ -119,19 +144,49 @@ fn file_name_of(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
-fn run_batch<F>(paths: &[String], op: F, verb: &str) -> FileOpResponse
+fn run_batch_with_progress<F>(
+    id: u64,
+    paths: &[String],
+    op: F,
+    done_verb: &str,
+    progress_verb: &str,
+    progress_sender: &mpsc::Sender<FileOpProgress>,
+    ctx: &egui::Context,
+) -> FileOpResponse
 where
     F: Fn(&str) -> Result<(), xplorer_core::error::CoreError>,
 {
+    if id != 0 && paths.len() > 1 {
+        let _ = progress_sender.send(FileOpProgress::Started {
+            id,
+            op_label: progress_verb.to_string(),
+            total: paths.len(),
+        });
+        ctx.request_repaint();
+    }
+
     let mut errors = Vec::new();
     for p in paths {
         if let Err(e) = op(p) {
             errors.push(format!("{}: {}", file_name_of(p), e));
         }
+        if id != 0 && paths.len() > 1 {
+            let _ = progress_sender.send(FileOpProgress::ItemDone {
+                id,
+                name: file_name_of(p),
+            });
+            ctx.request_repaint();
+        }
     }
+
+    if id != 0 && paths.len() > 1 {
+        let _ = progress_sender.send(FileOpProgress::Finished { id });
+        ctx.request_repaint();
+    }
+
     if errors.is_empty() {
         FileOpResponse::Success {
-            message: format!("{} {} item(s)", verb, paths.len()),
+            message: format!("{} {} item(s)", done_verb, paths.len()),
         }
     } else {
         FileOpResponse::Error {

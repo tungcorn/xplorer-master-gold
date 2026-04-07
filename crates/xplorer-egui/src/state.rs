@@ -6,6 +6,8 @@ use std::sync::mpsc;
 use egui_dock::DockState;
 use xplorer_core::types::{Bookmark, DriveInfo, FileEntry};
 
+use crate::ui::command_palette::CommandPaletteState;
+use crate::ui::shortcut_overlay::ShortcutOverlayState;
 use crate::watcher::WatchCommand;
 
 pub struct AppState {
@@ -13,14 +15,20 @@ pub struct AppState {
     pub resp_rx: mpsc::Receiver<DirResponse>,
     pub file_op_sender: mpsc::Sender<FileOpRequest>,
     pub file_op_rx: mpsc::Receiver<FileOpResponse>,
+    pub progress_rx: mpsc::Receiver<FileOpProgress>,
     pub watcher_sender: Option<mpsc::Sender<WatchCommand>>,
     pub show_sidebar: bool,
+    pub show_preview: bool,
     pub drives: Vec<DriveInfo>,
     pub bookmarks: Vec<Bookmark>,
     pub clipboard: Option<Clipboard>,
     pub toasts: egui_notify::Toasts,
     pub focus_filter: bool,
     pub next_tab_id: usize,
+    pub command_palette: CommandPaletteState,
+    pub shortcut_overlay: ShortcutOverlayState,
+    pub active_operations: Vec<OperationProgress>,
+    next_op_id: u64,
 }
 
 impl AppState {
@@ -29,20 +37,27 @@ impl AppState {
         resp_rx: mpsc::Receiver<DirResponse>,
         file_op_sender: mpsc::Sender<FileOpRequest>,
         file_op_rx: mpsc::Receiver<FileOpResponse>,
+        progress_rx: mpsc::Receiver<FileOpProgress>,
     ) -> Self {
         Self {
             req_sender,
             resp_rx,
             file_op_sender,
             file_op_rx,
+            progress_rx,
             watcher_sender: None,
             show_sidebar: true,
+            show_preview: false,
             drives: Vec::new(),
             bookmarks: Vec::new(),
             clipboard: None,
             toasts: egui_notify::Toasts::default().with_anchor(egui_notify::Anchor::BottomRight),
             focus_filter: false,
             next_tab_id: 1,
+            command_palette: CommandPaletteState::default(),
+            shortcut_overlay: ShortcutOverlayState::default(),
+            active_operations: Vec::new(),
+            next_op_id: 1,
         }
     }
 
@@ -113,12 +128,15 @@ impl AppState {
     pub fn do_paste(&mut self, tab: &Tab) {
         if let Some(clipboard) = self.clipboard.clone() {
             let dest_dir = tab.path.clone();
+            let id = self.alloc_op_id();
             let request = match clipboard.operation {
                 ClipboardOp::Copy => FileOpRequest::Copy {
+                    id,
                     sources: clipboard.paths,
                     dest_dir,
                 },
                 ClipboardOp::Cut => FileOpRequest::Move {
+                    id,
                     sources: clipboard.paths,
                     dest_dir,
                 },
@@ -133,9 +151,11 @@ impl AppState {
     pub fn do_delete(&self, tab: &Tab, to_trash: bool) {
         let paths = tab.selected_paths();
         if !paths.is_empty() {
-            let _ = self
-                .file_op_sender
-                .send(FileOpRequest::Delete { paths, to_trash });
+            let _ = self.file_op_sender.send(FileOpRequest::Delete {
+                id: 0,
+                paths,
+                to_trash,
+            });
         }
     }
 
@@ -219,6 +239,41 @@ impl AppState {
         }
     }
 
+    pub fn process_progress(&mut self) {
+        for msg in self.progress_rx.try_iter() {
+            match msg {
+                FileOpProgress::Started {
+                    id,
+                    op_label,
+                    total,
+                } => {
+                    self.active_operations.push(OperationProgress {
+                        id,
+                        op_label,
+                        total,
+                        completed: 0,
+                        current_name: String::new(),
+                    });
+                }
+                FileOpProgress::ItemDone { id, name } => {
+                    if let Some(op) = self.active_operations.iter_mut().find(|o| o.id == id) {
+                        op.completed += 1;
+                        op.current_name = name;
+                    }
+                }
+                FileOpProgress::Finished { id } => {
+                    self.active_operations.retain(|o| o.id != id);
+                }
+            }
+        }
+    }
+
+    pub fn alloc_op_id(&mut self) -> u64 {
+        let id = self.next_op_id;
+        self.next_op_id += 1;
+        id
+    }
+
     pub fn update_watcher(&self, dock: &DockState<Tab>) {
         if let Some(ref sender) = self.watcher_sender {
             if let Some(tab) = focused_tab(dock) {
@@ -294,6 +349,7 @@ pub struct Tab {
     pub filtered_cache: Vec<usize>,
     pub filter_dirty: bool,
     pub show_hidden: bool,
+    pub view_mode: ViewMode,
     /// Original entry index to scroll into view (consumed by file_list on next frame).
     pub scroll_to_row: Option<usize>,
     prev_filter_text: String,
@@ -324,6 +380,7 @@ impl Tab {
             filtered_cache: Vec::new(),
             filter_dirty: true,
             show_hidden: false,
+            view_mode: ViewMode::Details,
             scroll_to_row: None,
             prev_filter_text: String::new(),
             prev_show_hidden: false,
@@ -471,6 +528,12 @@ pub enum SortColumn {
     Modified,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewMode {
+    Details,
+    Grid,
+}
+
 pub enum DirRequest {
     LoadDirectory { tab_id: usize, path: String },
 }
@@ -508,14 +571,17 @@ pub enum NewItemMode {
 
 pub enum FileOpRequest {
     Copy {
+        id: u64,
         sources: Vec<String>,
         dest_dir: String,
     },
     Move {
+        id: u64,
         sources: Vec<String>,
         dest_dir: String,
     },
     Delete {
+        id: u64,
         paths: Vec<String>,
         to_trash: bool,
     },
@@ -534,6 +600,29 @@ pub enum FileOpRequest {
 pub enum FileOpResponse {
     Success { message: String },
     Error { message: String },
+}
+
+pub enum FileOpProgress {
+    Started {
+        id: u64,
+        op_label: String,
+        total: usize,
+    },
+    ItemDone {
+        id: u64,
+        name: String,
+    },
+    Finished {
+        id: u64,
+    },
+}
+
+pub struct OperationProgress {
+    pub id: u64,
+    pub op_label: String,
+    pub total: usize,
+    pub completed: usize,
+    pub current_name: String,
 }
 
 pub fn display_name_for_path(path: &str) -> String {
