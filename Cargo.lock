@@ -5236,6 +5236,8 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "rfd",
+ "serde",
+ "serde_json",
  "tokio",
  "xplorer-core",
 ]
