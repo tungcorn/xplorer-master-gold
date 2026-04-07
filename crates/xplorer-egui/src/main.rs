@@ -1,4 +1,5 @@
 mod icons;
+mod session;
 mod state;
 mod theme;
 mod ui;
@@ -7,7 +8,7 @@ mod worker;
 
 use eframe::egui;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex, TabIndex};
-use state::{focused_tab, focused_tab_mut, AppState, Tab};
+use state::{all_tab_paths, focused_tab, focused_tab_mut, AppState, Tab};
 use std::sync::mpsc;
 use ui::dock_viewer::{ViewerAction, XplorerTabViewer};
 use ui::sidebar::SidebarAction;
@@ -36,9 +37,6 @@ impl XplorerApp {
         worker::spawn_directory_worker(req_rx, resp_tx, cc.egui_ctx.clone());
         worker::spawn_file_op_worker(file_op_rx, file_op_resp_tx, cc.egui_ctx.clone());
 
-        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
-        let home_str = home.to_string_lossy().to_string();
-
         let drives = xplorer_core::system::list_drives().unwrap_or_default();
         let bookmarks = xplorer_core::bookmarks::get_bookmarks().unwrap_or_default();
 
@@ -46,10 +44,34 @@ impl XplorerApp {
         state.drives = drives;
         state.bookmarks = bookmarks;
 
-        let initial_tab = state.create_tab(&home_str);
-        state.request_load(initial_tab.id, home_str);
-
-        let dock_state = DockState::new(vec![initial_tab]);
+        let dock_state = if let Some(saved) = session::load() {
+            state.show_sidebar = saved.show_sidebar;
+            let tabs: Vec<Tab> = saved
+                .tabs
+                .iter()
+                .filter(|t| std::path::Path::new(&t.path).exists())
+                .map(|t| {
+                    let tab = state.create_tab(&t.path);
+                    state.request_load(tab.id, t.path.clone());
+                    tab
+                })
+                .collect();
+            if tabs.is_empty() {
+                let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
+                let home_str = home.to_string_lossy().to_string();
+                let tab = state.create_tab(&home_str);
+                state.request_load(tab.id, home_str);
+                DockState::new(vec![tab])
+            } else {
+                DockState::new(tabs)
+            }
+        } else {
+            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
+            let home_str = home.to_string_lossy().to_string();
+            let tab = state.create_tab(&home_str);
+            state.request_load(tab.id, home_str);
+            DockState::new(vec![tab])
+        };
 
         let watcher_sender = watcher::spawn_watcher(state.req_sender.clone(), cc.egui_ctx.clone());
         state.watcher_sender = Some(watcher_sender);
@@ -118,6 +140,9 @@ impl XplorerApp {
                 self.dock_state
                     .set_focused_node_and_surface((SurfaceIndex::main(), next));
                 self.state.update_watcher(&self.dock_state);
+                if let Some(tab) = focused_tab(&self.dock_state) {
+                    self.state.refresh_tab(tab);
+                }
             }
         }
 
@@ -146,6 +171,9 @@ impl XplorerApp {
                 if let Some(tab_idx) = next_tab {
                     self.dock_state.set_active_tab((surface, node, tab_idx));
                     self.state.update_watcher(&self.dock_state);
+                    if let Some(tab) = focused_tab(&self.dock_state) {
+                        self.state.refresh_tab(tab);
+                    }
                 }
             }
         }
@@ -182,6 +210,12 @@ impl XplorerApp {
         }
         if ctx.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.ctrl) {
             self.state.focus_filter = true;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::H) && i.modifiers.ctrl) {
+            if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                tab.show_hidden = !tab.show_hidden;
+                tab.filter_dirty = true;
+            }
         }
         if ctx.input(|i| i.key_pressed(egui::Key::F5)) {
             if let Some(tab) = focused_tab(&self.dock_state) {
@@ -264,6 +298,7 @@ impl XplorerApp {
                         tab.selected_set.clear();
                         tab.selected_set.insert(next_orig);
                         tab.last_clicked_index = Some(next_orig);
+                        tab.scroll_to_row = Some(next_orig);
                     }
                 }
             }
@@ -274,6 +309,7 @@ impl XplorerApp {
                         tab.selected_set.clear();
                         tab.selected_set.insert(prev_orig);
                         tab.last_clicked_index = Some(prev_orig);
+                        tab.scroll_to_row = Some(prev_orig);
                     }
                 }
             }
@@ -432,6 +468,18 @@ impl eframe::App for XplorerApp {
         } else if dismiss_dialog || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.confirm_delete = None;
         }
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        let tabs: Vec<session::TabSession> = all_tab_paths(&self.dock_state)
+            .into_iter()
+            .map(|path| session::TabSession { path })
+            .collect();
+        let sess = session::Session {
+            tabs,
+            show_sidebar: self.state.show_sidebar,
+        };
+        session::save(&sess);
     }
 }
 

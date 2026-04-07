@@ -260,6 +260,18 @@ pub fn find_tab_by_id_mut(dock: &mut DockState<Tab>, id: usize) -> Option<&mut T
     None
 }
 
+pub fn all_tab_paths(dock: &DockState<Tab>) -> Vec<String> {
+    let mut paths = Vec::new();
+    for (_surface_index, node) in dock.iter_all_nodes() {
+        if let Some(tabs) = node.tabs() {
+            for tab in tabs {
+                paths.push(tab.path.clone());
+            }
+        }
+    }
+    paths
+}
+
 pub struct Tab {
     pub id: usize,
     pub path: String,
@@ -281,7 +293,11 @@ pub struct Tab {
     pub new_item_name: String,
     pub filtered_cache: Vec<usize>,
     pub filter_dirty: bool,
+    pub show_hidden: bool,
+    /// Original entry index to scroll into view (consumed by file_list on next frame).
+    pub scroll_to_row: Option<usize>,
     prev_filter_text: String,
+    prev_show_hidden: bool,
 }
 
 impl Tab {
@@ -307,7 +323,10 @@ impl Tab {
             new_item_name: String::new(),
             filtered_cache: Vec::new(),
             filter_dirty: true,
+            show_hidden: false,
+            scroll_to_row: None,
             prev_filter_text: String::new(),
+            prev_show_hidden: false,
         }
     }
 
@@ -403,18 +422,25 @@ impl Tab {
 
     /// Rebuild filtered_cache if filter_text changed or filter_dirty is set.
     pub fn ensure_filtered(&mut self) {
-        if self.filter_dirty || self.filter_text != self.prev_filter_text {
+        if self.filter_dirty
+            || self.filter_text != self.prev_filter_text
+            || self.show_hidden != self.prev_show_hidden
+        {
             let lower_filter = self.filter_text.to_lowercase();
             self.filtered_cache = self
                 .entries
                 .iter()
                 .enumerate()
                 .filter(|(_, e)| {
+                    if !self.show_hidden && e.name.starts_with('.') {
+                        return false;
+                    }
                     lower_filter.is_empty() || e.name.to_lowercase().contains(&lower_filter)
                 })
                 .map(|(i, _)| i)
                 .collect();
             self.prev_filter_text = self.filter_text.clone();
+            self.prev_show_hidden = self.show_hidden;
             self.filter_dirty = false;
         }
     }

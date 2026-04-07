@@ -7,43 +7,62 @@ pub fn show_for_tab(ui: &mut egui::Ui, tab: &Tab) {
     ui.separator();
     ui.horizontal(|ui| {
         ui.set_min_height(24.0);
-        let total = tab.entries.len();
-        let filtered_count = tab.filtered_cache.len();
-        let selected_count = tab.selected_set.len();
 
-        if !tab.filter_text.is_empty() {
+        if tab.loading {
+            ui.spinner();
             ui.label(
-                egui::RichText::new(format!("{} of {} items", filtered_count, total))
+                egui::RichText::new("Loading…")
                     .color(theme::SECONDARY)
                     .size(12.0),
             );
         } else {
-            ui.label(
-                egui::RichText::new(format!("{} items", total))
-                    .color(theme::SECONDARY)
+            let total = tab.entries.len();
+            let filtered_count = tab.filtered_cache.len();
+            let selected_count = tab.selected_set.len();
+
+            if !tab.filter_text.is_empty() {
+                ui.label(
+                    egui::RichText::new(format!("{} of {} items", filtered_count, total))
+                        .color(theme::SECONDARY)
+                        .size(12.0),
+                );
+            } else {
+                ui.label(
+                    egui::RichText::new(format!("{} items", total))
+                        .color(theme::SECONDARY)
+                        .size(12.0),
+                );
+            }
+
+            if selected_count > 0 {
+                let selected_size: u64 = tab
+                    .selected_set
+                    .iter()
+                    .filter_map(|&i| tab.entries.get(i))
+                    .filter(|e| !e.is_dir)
+                    .map(|e| e.size)
+                    .sum();
+
+                ui.label(egui::RichText::new("·").color(theme::MUTED).size(12.0));
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{} selected ({})",
+                        selected_count,
+                        format_size(selected_size)
+                    ))
+                    .color(theme::TEXT)
                     .size(12.0),
-            );
-        }
+                );
+            }
 
-        if selected_count > 0 {
-            let selected_size: u64 = tab
-                .selected_set
-                .iter()
-                .filter_map(|&i| tab.entries.get(i))
-                .filter(|e| !e.is_dir)
-                .map(|e| e.size)
-                .sum();
-
-            ui.label(egui::RichText::new("·").color(theme::MUTED).size(12.0));
-            ui.label(
-                egui::RichText::new(format!(
-                    "{} selected ({})",
-                    selected_count,
-                    format_size(selected_size)
-                ))
-                .color(theme::TEXT)
-                .size(12.0),
-            );
+            if tab.show_hidden {
+                ui.label(egui::RichText::new("·").color(theme::MUTED).size(12.0));
+                ui.label(
+                    egui::RichText::new("Hidden visible")
+                        .color(theme::SELECTION)
+                        .size(12.0),
+                );
+            }
         }
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

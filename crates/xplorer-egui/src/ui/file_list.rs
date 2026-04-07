@@ -1,10 +1,11 @@
+use std::collections::HashSet;
 use std::path::Path;
 
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 
 use crate::icons;
-use crate::state::{AppState, NewItemMode, SortColumn, Tab};
+use crate::state::{AppState, ClipboardOp, NewItemMode, SortColumn, Tab};
 use crate::theme;
 use crate::ui::context_menu::{self, EmptyAreaAction, FileContextAction};
 use crate::ui::dock_viewer::ViewerAction;
@@ -45,6 +46,13 @@ pub fn show_for_tab(
     let selected = tab.selected_set.clone();
     let has_clipboard = state.clipboard.is_some();
     let rename_idx = tab.rename_state.as_ref().map(|r| r.entry_index);
+    let scroll_target = tab.scroll_to_row.take();
+    let cut_paths: HashSet<String> = state
+        .clipboard
+        .as_ref()
+        .filter(|cb| cb.operation == ClipboardOp::Cut)
+        .map(|cb| cb.paths.iter().cloned().collect())
+        .unwrap_or_default();
 
     let mut sort_clicked: Option<SortColumn> = None;
     let mut selection_action: Option<SelectionAction> = None;
@@ -53,6 +61,7 @@ pub fn show_for_tab(
     let mut file_ctx_action: Option<(FileContextAction, String, bool)> = None;
     let mut rename_commit: Option<(String, String)> = None;
     let mut any_row_hovered = false;
+    let mut right_click_select: Option<usize> = None;
 
     let text_height = ui.text_style_height(&egui::TextStyle::Body);
     let row_height = (text_height + 16.0).max(32.0);
@@ -123,6 +132,13 @@ pub fn show_for_tab(
                 let original_idx = filtered[idx];
                 let entry = &tab.entries[original_idx];
                 let is_selected = selected.contains(&original_idx);
+                let is_cut = cut_paths.contains(&entry.path);
+                let name_color = if is_cut { theme::MUTED } else { theme::TEXT };
+                let detail_color = if is_cut {
+                    egui::Color32::from_rgba_premultiplied(86, 95, 137, 100)
+                } else {
+                    theme::SECONDARY
+                };
 
                 row.set_selected(is_selected);
 
@@ -151,10 +167,20 @@ pub fn show_for_tab(
 
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 6.0;
-                            ui.label(egui::RichText::new(icon).color(icon_color).size(16.0));
+                            let icon_c = if is_cut {
+                                egui::Color32::from_rgba_premultiplied(
+                                    icon_color.r(),
+                                    icon_color.g(),
+                                    icon_color.b(),
+                                    100,
+                                )
+                            } else {
+                                icon_color
+                            };
+                            ui.label(egui::RichText::new(icon).color(icon_c).size(16.0));
                             ui.add(
                                 egui::Label::new(
-                                    egui::RichText::new(&entry.name).color(theme::TEXT),
+                                    egui::RichText::new(&entry.name).color(name_color),
                                 )
                                 .selectable(false)
                                 .truncate(),
@@ -171,10 +197,8 @@ pub fn show_for_tab(
                             format_size(entry.size)
                         };
                         ui.add(
-                            egui::Label::new(
-                                egui::RichText::new(size_text).color(theme::SECONDARY),
-                            )
-                            .selectable(false),
+                            egui::Label::new(egui::RichText::new(size_text).color(detail_color))
+                                .selectable(false),
                         );
                     });
                 });
@@ -182,7 +206,7 @@ pub fn show_for_tab(
                 let (_, type_resp) = row.col(|ui| {
                     let type_label = human_file_type(&entry.file_type, entry.is_dir);
                     ui.add(
-                        egui::Label::new(egui::RichText::new(type_label).color(theme::SECONDARY))
+                        egui::Label::new(egui::RichText::new(type_label).color(detail_color))
                             .selectable(false),
                     );
                 });
@@ -191,7 +215,7 @@ pub fn show_for_tab(
                     ui.add(
                         egui::Label::new(
                             egui::RichText::new(format_timestamp(entry.modified))
-                                .color(theme::SECONDARY),
+                                .color(detail_color),
                         )
                         .selectable(false),
                     );
@@ -201,6 +225,14 @@ pub fn show_for_tab(
                 let interact = combined | row.response();
                 if interact.hovered() {
                     any_row_hovered = true;
+                }
+
+                if scroll_target == Some(original_idx) {
+                    interact.scroll_to_me(Some(egui::Align::Center));
+                }
+
+                if interact.secondary_clicked() && !is_selected {
+                    right_click_select = Some(original_idx);
                 }
 
                 let ctx_action =
@@ -238,6 +270,12 @@ pub fn show_for_tab(
 
     if let Some(action) = selection_action {
         apply_selection(tab, action);
+    }
+
+    if let Some(idx) = right_click_select {
+        tab.selected_set.clear();
+        tab.selected_set.insert(idx);
+        tab.last_clicked_index = Some(idx);
     }
 
     match double_click_action {
