@@ -721,6 +721,66 @@ impl eframe::App for XplorerApp {
         if !self.state.active_operations.is_empty() {
             ctx.request_repaint();
         }
+
+        if self.state.drag.active {
+            let pointer_pos = ctx.input(|i| i.pointer.interact_pos());
+            let released = ctx.input(|i| i.pointer.any_released());
+
+            if let Some(pos) = pointer_pos {
+                egui::Area::new(egui::Id::new("drag_overlay"))
+                    .fixed_pos(pos + egui::vec2(12.0, 12.0))
+                    .order(egui::Order::Tooltip)
+                    .show(ctx, |ui| {
+                        let ctrl_held = ctx.input(|i| i.modifiers.ctrl);
+                        let verb = if ctrl_held { "Copy" } else { "Move" };
+                        egui::Frame::new()
+                            .fill(theme::SURFACE)
+                            .corner_radius(4.0)
+                            .stroke(egui::Stroke::new(1.0, theme::SELECTION))
+                            .inner_margin(6.0)
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} {} item(s)",
+                                        verb, self.state.drag.file_count
+                                    ))
+                                    .color(theme::TEXT)
+                                    .size(12.0),
+                                );
+                            });
+                    });
+            }
+
+            if released {
+                let source_tab_id = self.state.drag.source_tab_id;
+                let paths = std::mem::take(&mut self.state.drag.paths);
+                self.state.drag.cancel();
+
+                if let Some(target_tab) = focused_tab(&self.dock_state) {
+                    if target_tab.id != source_tab_id {
+                        let dest_dir = target_tab.path.clone();
+                        let ctrl_held = ctx.input(|i| i.modifiers.ctrl);
+                        let id = self.state.alloc_op_id();
+                        let request = if ctrl_held {
+                            state::FileOpRequest::Copy {
+                                id,
+                                sources: paths,
+                                dest_dir,
+                            }
+                        } else {
+                            state::FileOpRequest::Move {
+                                id,
+                                sources: paths,
+                                dest_dir,
+                            }
+                        };
+                        let _ = self.state.file_op_sender.send(request);
+                    }
+                }
+            }
+
+            ctx.request_repaint();
+        }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

@@ -75,6 +75,7 @@ fn show_details_view(
     let mut rename_commit: Option<(String, String)> = None;
     let mut any_row_hovered = false;
     let mut right_click_select: Option<usize> = None;
+    let mut drag_started_on_selected = false;
 
     let text_height = ui.text_style_height(&egui::TextStyle::Body);
     let row_height = (text_height + 16.0).max(32.0);
@@ -88,7 +89,7 @@ fn show_details_view(
     let table = TableBuilder::new(ui)
         .striped(false)
         .resizable(true)
-        .sense(egui::Sense::click())
+        .sense(egui::Sense::click_and_drag())
         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
         .id_salt(("file_table", tab.id))
         .column(Column::remainder().at_least(80.0).clip(true))
@@ -273,6 +274,9 @@ fn show_details_view(
                             shift: modifiers.shift,
                         });
                     }
+                    if interact.drag_started() && is_selected {
+                        drag_started_on_selected = true;
+                    }
                 }
             });
         });
@@ -303,6 +307,13 @@ fn show_details_view(
 
     if let Some(path) = middle_click_split {
         actions.push(ViewerAction::SplitRight { path });
+    }
+
+    if drag_started_on_selected && !state.drag.active {
+        let paths = tab.selected_paths();
+        if !paths.is_empty() {
+            state.drag.start(tab.id, paths);
+        }
     }
 
     if let Some((action, path, is_dir)) = file_ctx_action {

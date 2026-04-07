@@ -32,6 +32,7 @@ pub struct AppState {
     pub active_operations: Vec<OperationProgress>,
     pub properties_dialog: Option<PropertiesDialog>,
     pub search: SearchState,
+    pub drag: DragDropState,
     next_op_id: u64,
 }
 
@@ -63,6 +64,7 @@ impl AppState {
             active_operations: Vec::new(),
             properties_dialog: None,
             search: SearchState::default(),
+            drag: DragDropState::default(),
             next_op_id: 1,
         }
     }
@@ -644,4 +646,37 @@ pub fn display_name_for_path(path: &str) -> String {
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| path.to_string())
+}
+
+pub struct DragDropState {
+    pub active: bool,
+    pub source_tab_id: usize,
+    pub paths: Vec<String>,
+    pub file_count: usize,
+}
+
+impl Default for DragDropState {
+    fn default() -> Self {
+        Self {
+            active: false,
+            source_tab_id: 0,
+            paths: Vec::new(),
+            file_count: 0,
+        }
+    }
+}
+
+impl DragDropState {
+    pub fn start(&mut self, tab_id: usize, paths: Vec<String>) {
+        self.active = true;
+        self.source_tab_id = tab_id;
+        self.file_count = paths.len();
+        self.paths = paths;
+    }
+
+    pub fn cancel(&mut self) {
+        self.active = false;
+        self.paths.clear();
+        self.file_count = 0;
+    }
 }
