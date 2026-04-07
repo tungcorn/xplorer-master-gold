@@ -328,11 +328,7 @@ pub fn show(ctx: &egui::Context, state: &mut SearchState) -> Option<SearchAction
                         if result.is_dir {
                             action = Some(SearchAction::NavigateTo(result.path.clone()));
                         } else {
-                            let parent = Path::new(&result.path)
-                                .parent()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_default();
-                            action = Some(SearchAction::NavigateTo(parent));
+                            action = Some(SearchAction::OpenFile(result.path.clone()));
                         }
                         state.close();
                         return;
@@ -409,6 +405,17 @@ pub fn show(ctx: &egui::Context, state: &mut SearchState) -> Option<SearchAction
                                                 .truncate(),
                                             );
 
+                                            if let Some(ref line) = result.line_match {
+                                                ui.add(
+                                                    egui::Label::new(
+                                                        egui::RichText::new(line)
+                                                            .color(theme::MUTED)
+                                                            .size(10.0),
+                                                    )
+                                                    .truncate(),
+                                                );
+                                            }
+
                                             let rel_path = result
                                                 .path
                                                 .strip_prefix(&state.root_path)
@@ -441,11 +448,7 @@ pub fn show(ctx: &egui::Context, state: &mut SearchState) -> Option<SearchAction
                         if result.is_dir {
                             action = Some(SearchAction::NavigateTo(result.path.clone()));
                         } else {
-                            let parent = Path::new(&result.path)
-                                .parent()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_default();
-                            action = Some(SearchAction::NavigateTo(parent));
+                            action = Some(SearchAction::OpenFile(result.path.clone()));
                         }
                         state.close();
                     }

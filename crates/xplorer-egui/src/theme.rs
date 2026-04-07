@@ -17,8 +17,10 @@ pub const SECONDARY: egui::Color32 = egui::Color32::from_rgb(0x8B, 0x90, 0x97);
 pub const MUTED: egui::Color32 = egui::Color32::from_rgb(0x5A, 0x60, 0x6B);
 pub const SELECTION: egui::Color32 = egui::Color32::from_rgb(0x1F, 0xA6, 0xE5);
 pub const WARNING: egui::Color32 = egui::Color32::from_rgb(0xF4, 0x4B, 0x4B);
+#[allow(dead_code)]
 pub const SUCCESS: egui::Color32 = egui::Color32::from_rgb(0x34, 0xD3, 0x99);
 /// Search match highlight
+#[allow(dead_code)]
 pub const MATCH: egui::Color32 = egui::Color32::from_rgb(0xFA, 0xCC, 0x15);
 pub const FOLDER_YELLOW: egui::Color32 = egui::Color32::from_rgb(0xF2, 0xC4, 0x4E);
 
