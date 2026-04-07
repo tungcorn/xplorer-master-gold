@@ -6,6 +6,7 @@ use std::sync::mpsc;
 use egui_dock::DockState;
 use xplorer_core::types::{Bookmark, DriveInfo, FileEntry};
 
+use crate::ui::batch_rename::BatchRenameState;
 use crate::ui::command_palette::CommandPaletteState;
 use crate::ui::properties_dialog::PropertiesDialog;
 use crate::ui::search_panel::SearchState;
@@ -25,7 +26,6 @@ pub struct AppState {
     pub bookmarks: Vec<Bookmark>,
     pub clipboard: Option<Clipboard>,
     pub toasts: egui_notify::Toasts,
-    pub focus_filter: bool,
     pub next_tab_id: usize,
     pub command_palette: CommandPaletteState,
     pub shortcut_overlay: ShortcutOverlayState,
@@ -33,6 +33,7 @@ pub struct AppState {
     pub properties_dialog: Option<PropertiesDialog>,
     pub search: SearchState,
     pub drag: DragDropState,
+    pub batch_rename: BatchRenameState,
     next_op_id: u64,
 }
 
@@ -57,7 +58,6 @@ impl AppState {
             bookmarks: Vec::new(),
             clipboard: None,
             toasts: egui_notify::Toasts::default().with_anchor(egui_notify::Anchor::BottomRight),
-            focus_filter: false,
             next_tab_id: 1,
             command_palette: CommandPaletteState::default(),
             shortcut_overlay: ShortcutOverlayState::default(),
@@ -65,6 +65,7 @@ impl AppState {
             properties_dialog: None,
             search: SearchState::default(),
             drag: DragDropState::default(),
+            batch_rename: BatchRenameState::default(),
             next_op_id: 1,
         }
     }
@@ -357,7 +358,7 @@ pub struct Tab {
     pub filter_text: String,
     pub selected_set: HashSet<usize>,
     pub last_clicked_index: Option<usize>,
-    pub editing_address_bar: bool,
+    pub omnibar_mode: OmnibarMode,
     pub address_bar_text: String,
     pub rename_state: Option<RenameState>,
     pub new_item_mode: Option<NewItemMode>,
@@ -388,7 +389,7 @@ impl Tab {
             filter_text: String::new(),
             selected_set: HashSet::new(),
             last_clicked_index: None,
-            editing_address_bar: false,
+            omnibar_mode: OmnibarMode::Breadcrumb,
             address_bar_text: String::new(),
             rename_state: None,
             new_item_mode: None,
@@ -548,6 +549,13 @@ pub enum SortColumn {
 pub enum ViewMode {
     Details,
     Grid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OmnibarMode {
+    Breadcrumb,
+    GoTo,
+    Filter,
 }
 
 pub enum DirRequest {

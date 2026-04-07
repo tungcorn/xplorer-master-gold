@@ -58,6 +58,7 @@ fn show_details_view(
     let sort_asc = tab.sort_ascending;
     let selected = tab.selected_set.clone();
     let has_clipboard = state.clipboard.is_some();
+    let selected_count = selected.len();
     let rename_idx = tab.rename_state.as_ref().map(|r| r.entry_index);
     let scroll_target = tab.scroll_to_row.take();
     let cut_paths: HashSet<String> = state
@@ -249,8 +250,12 @@ fn show_details_view(
                     right_click_select = Some(original_idx);
                 }
 
-                let ctx_action =
-                    context_menu::file_context_menu(&interact, entry.is_dir, has_clipboard);
+                let ctx_action = context_menu::file_context_menu(
+                    &interact,
+                    entry.is_dir,
+                    has_clipboard,
+                    selected_count,
+                );
                 if !matches!(ctx_action, FileContextAction::None) {
                     file_ctx_action = Some((ctx_action, entry.path.clone(), entry.is_dir));
                 }
@@ -339,6 +344,7 @@ fn show_grid_view(
     let filtered = tab.filtered_cache.clone();
     let selected = tab.selected_set.clone();
     let has_clipboard = state.clipboard.is_some();
+    let selected_count = selected.len();
     let cut_paths: HashSet<String> = state
         .clipboard
         .as_ref()
@@ -424,8 +430,12 @@ fn show_grid_view(
                     resp.clone().on_hover_text(&entry.name);
                 }
 
-                let ctx_action =
-                    context_menu::file_context_menu(&resp, entry.is_dir, has_clipboard);
+                let ctx_action = context_menu::file_context_menu(
+                    &resp,
+                    entry.is_dir,
+                    has_clipboard,
+                    selected_count,
+                );
                 if !matches!(ctx_action, FileContextAction::None) {
                     file_ctx_action = Some((ctx_action, entry.path.clone(), entry.is_dir));
                     any_item_interacted = true;
@@ -725,6 +735,23 @@ fn handle_file_context_action(
         FileContextAction::Properties => {
             state.properties_dialog =
                 Some(crate::ui::properties_dialog::PropertiesDialog::open(path));
+        }
+        FileContextAction::BatchRename => {
+            let paths_and_names: Vec<(String, String)> = tab
+                .selected_set
+                .iter()
+                .filter_map(|&i| tab.entries.get(i))
+                .map(|e| {
+                    let name = Path::new(&e.path)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| e.name.clone());
+                    (e.path.clone(), name)
+                })
+                .collect();
+            if paths_and_names.len() > 1 {
+                state.batch_rename.open_with(paths_and_names);
+            }
         }
         FileContextAction::None => {}
     }

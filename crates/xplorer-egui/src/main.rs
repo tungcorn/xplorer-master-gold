@@ -109,6 +109,12 @@ impl XplorerApp {
         if self.state.search.open {
             return;
         }
+        if self.state.batch_rename.open {
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.state.batch_rename.open = false;
+            }
+            return;
+        }
         if self.state.properties_dialog.is_some() {
             if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.state.properties_dialog = None;
@@ -119,6 +125,27 @@ impl XplorerApp {
         if ctx.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.ctrl && i.modifiers.shift) {
             if let Some(tab) = focused_tab(&self.dock_state) {
                 self.state.search.open_at(&tab.path);
+            }
+            return;
+        }
+
+        if ctx.input(|i| i.key_pressed(egui::Key::R) && i.modifiers.ctrl && i.modifiers.shift) {
+            if let Some(tab) = focused_tab(&self.dock_state) {
+                if tab.selected_set.len() > 1 {
+                    let paths_and_names: Vec<(String, String)> = tab
+                        .selected_set
+                        .iter()
+                        .filter_map(|&i| tab.entries.get(i))
+                        .map(|e| {
+                            let name = std::path::Path::new(&e.path)
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| e.name.clone());
+                            (e.path.clone(), name)
+                        })
+                        .collect();
+                    self.state.batch_rename.open_with(paths_and_names);
+                }
             }
             return;
         }
@@ -233,7 +260,7 @@ impl XplorerApp {
         }
         if ctx.input(|i| i.key_pressed(egui::Key::L) && i.modifiers.ctrl) {
             if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
-                tab.editing_address_bar = true;
+                tab.omnibar_mode = state::OmnibarMode::GoTo;
                 tab.address_bar_text = tab.path.clone();
             }
         }
@@ -247,7 +274,9 @@ impl XplorerApp {
             self.state.show_sidebar = !self.state.show_sidebar;
         }
         if ctx.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.ctrl) {
-            self.state.focus_filter = true;
+            if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                tab.omnibar_mode = state::OmnibarMode::Filter;
+            }
         }
         if ctx.input(|i| i.key_pressed(egui::Key::H) && i.modifiers.ctrl) {
             if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
@@ -458,11 +487,13 @@ impl XplorerApp {
                 }
             }
             PaletteAction::FocusFilter => {
-                self.state.focus_filter = true;
+                if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
+                    tab.omnibar_mode = state::OmnibarMode::Filter;
+                }
             }
             PaletteAction::EditAddressBar => {
                 if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
-                    tab.editing_address_bar = true;
+                    tab.omnibar_mode = state::OmnibarMode::GoTo;
                     tab.address_bar_text = tab.path.clone();
                 }
             }
@@ -528,6 +559,25 @@ impl XplorerApp {
                 if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
                     tab.ensure_filtered();
                     tab.selected_set = tab.filtered_cache.iter().copied().collect();
+                }
+            }
+            PaletteAction::BatchRename => {
+                if let Some(tab) = focused_tab(&self.dock_state) {
+                    if tab.selected_set.len() > 1 {
+                        let paths_and_names: Vec<(String, String)> = tab
+                            .selected_set
+                            .iter()
+                            .filter_map(|&i| tab.entries.get(i))
+                            .map(|e| {
+                                let name = std::path::Path::new(&e.path)
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().to_string())
+                                    .unwrap_or_else(|| e.name.clone());
+                                (e.path.clone(), name)
+                            })
+                            .collect();
+                        self.state.batch_rename.open_with(paths_and_names);
+                    }
                 }
             }
             PaletteAction::NavigateTo(path) => {
@@ -646,10 +696,6 @@ impl eframe::App for XplorerApp {
         }
         self.process_viewer_actions(actions);
 
-        if self.state.focus_filter {
-            self.state.focus_filter = false;
-        }
-
         self.state.toasts.show(ctx);
 
         ui::progress_panel::show(ctx, &self.state.active_operations);
@@ -675,6 +721,15 @@ impl eframe::App for XplorerApp {
         }
 
         ui::properties_dialog::show(ctx, &mut self.state.properties_dialog);
+
+        if let Some(result) = ui::batch_rename::show(ctx, &mut self.state.batch_rename) {
+            for (old_path, new_path) in result.renames {
+                let _ = self
+                    .state
+                    .file_op_sender
+                    .send(state::FileOpRequest::Rename { old_path, new_path });
+            }
+        }
 
         let mut dismiss_dialog = false;
         let mut do_permanent_delete = false;

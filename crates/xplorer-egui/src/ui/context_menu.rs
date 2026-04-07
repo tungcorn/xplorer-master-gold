@@ -14,6 +14,7 @@ pub enum FileContextAction {
     Delete,
     MoveToTrash,
     Rename,
+    BatchRename,
     AddToFavorites,
     Properties,
 }
@@ -40,6 +41,7 @@ pub fn file_context_menu(
     response: &egui::Response,
     is_dir: bool,
     has_clipboard: bool,
+    selected_count: usize,
 ) -> FileContextAction {
     let mut action = FileContextAction::None;
 
@@ -66,8 +68,12 @@ pub fn file_context_menu(
             ui.close_menu();
         }
         ui.separator();
-        if menu_item(ui, "Rename", Some("F2")) {
+        if selected_count <= 1 && menu_item(ui, "Rename", Some("F2")) {
             action = FileContextAction::Rename;
+            ui.close_menu();
+        }
+        if selected_count > 1 && menu_item(ui, "Batch Rename...", Some("Ctrl+Shift+R")) {
+            action = FileContextAction::BatchRename;
             ui.close_menu();
         }
         if menu_item(ui, "Move to Trash", Some("Del")) {

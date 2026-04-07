@@ -1,3 +1,4 @@
+pub mod batch_rename;
 pub mod command_palette;
 pub mod context_menu;
 pub mod dock_viewer;

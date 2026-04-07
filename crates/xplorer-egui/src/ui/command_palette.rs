@@ -66,6 +66,8 @@ pub enum PaletteAction {
     MoveToTrash,
     DeletePermanently,
     SelectAll,
+    BatchRename,
+    #[allow(dead_code)]
     NavigateTo(String),
 }
 
@@ -170,6 +172,11 @@ fn all_commands() -> Vec<PaletteEntry> {
             label: "Select All".into(),
             shortcut: Some("Ctrl+A".into()),
             action: PaletteAction::SelectAll,
+        },
+        PaletteEntry {
+            label: "Batch Rename...".into(),
+            shortcut: Some("Ctrl+Shift+R".into()),
+            action: PaletteAction::BatchRename,
         },
     ]
 }
