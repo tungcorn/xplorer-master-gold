@@ -34,6 +34,9 @@ pub struct AppState {
     pub search: SearchState,
     pub drag: DragDropState,
     pub batch_rename: BatchRenameState,
+    pub workspace_names: Vec<String>,
+    pub save_workspace_dialog: Option<String>,
+    pub undo_stack: Vec<UndoEntry>,
     next_op_id: u64,
 }
 
@@ -66,6 +69,9 @@ impl AppState {
             search: SearchState::default(),
             drag: DragDropState::default(),
             batch_rename: BatchRenameState::default(),
+            workspace_names: Vec::new(),
+            save_workspace_dialog: None,
+            undo_stack: Vec::new(),
             next_op_id: 1,
         }
     }
@@ -186,9 +192,11 @@ impl AppState {
                     tab_id,
                     path,
                     entries,
+                    git_info,
                 } => {
                     if let Some(tab) = find_tab_by_id_mut(dock, tab_id) {
                         tab.loading = false;
+                        tab.git_info = git_info;
                         match entries {
                             Ok(e) => {
                                 let is_refresh = tab.path == path;
@@ -235,8 +243,11 @@ impl AppState {
     pub fn process_file_op_responses(&mut self, dock: &DockState<Tab>) {
         for resp in self.file_op_rx.try_iter() {
             match resp {
-                FileOpResponse::Success { message } => {
+                FileOpResponse::Success { message, undo } => {
                     self.toasts.success(message);
+                    if let Some(entry) = undo {
+                        self.undo_stack.push(entry);
+                    }
                     if let Some(tab) = focused_tab(dock) {
                         self.request_load(tab.id, tab.path.clone());
                     }
@@ -367,6 +378,7 @@ pub struct Tab {
     pub filter_dirty: bool,
     pub show_hidden: bool,
     pub view_mode: ViewMode,
+    pub git_info: Option<xplorer_core::git::GitInfo>,
     /// Original entry index to scroll into view (consumed by file_list on next frame).
     pub scroll_to_row: Option<usize>,
     prev_filter_text: String,
@@ -398,6 +410,7 @@ impl Tab {
             filter_dirty: true,
             show_hidden: false,
             view_mode: ViewMode::Details,
+            git_info: None,
             scroll_to_row: None,
             prev_filter_text: String::new(),
             prev_show_hidden: false,
@@ -567,6 +580,7 @@ pub enum DirResponse {
         tab_id: usize,
         path: String,
         entries: Result<Vec<FileEntry>, String>,
+        git_info: Option<xplorer_core::git::GitInfo>,
     },
 }
 
@@ -622,8 +636,34 @@ pub enum FileOpRequest {
 }
 
 pub enum FileOpResponse {
-    Success { message: String },
-    Error { message: String },
+    Success {
+        message: String,
+        undo: Option<UndoEntry>,
+    },
+    Error {
+        message: String,
+    },
+}
+
+#[derive(Clone)]
+pub enum UndoEntry {
+    Rename {
+        old_path: String,
+        new_path: String,
+    },
+    Move {
+        sources: Vec<String>,
+        original_dirs: Vec<String>,
+    },
+    Copy {
+        created: Vec<String>,
+    },
+    CreateFolder {
+        path: String,
+    },
+    CreateFile {
+        path: String,
+    },
 }
 
 pub enum FileOpProgress {

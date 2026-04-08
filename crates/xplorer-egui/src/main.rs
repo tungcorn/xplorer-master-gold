@@ -85,6 +85,9 @@ impl XplorerApp {
         state.watcher_sender = Some(watcher_sender);
         state.update_watcher(&dock_state);
 
+        let ws_store = session::load_workspaces();
+        state.workspace_names = ws_store.workspaces.iter().map(|w| w.name.clone()).collect();
+
         Self {
             dock_state,
             state,
@@ -319,6 +322,9 @@ impl XplorerApp {
                     self.state.do_paste(tab);
                 }
             }
+            if ctx.input(|i| i.key_pressed(egui::Key::Z) && i.modifiers.ctrl) {
+                self.execute_undo();
+            }
             if ctx.input(|i| i.key_pressed(egui::Key::Delete) && !i.modifiers.shift) {
                 if let Some(tab) = focused_tab(&self.dock_state) {
                     self.state.do_delete(tab, true);
@@ -411,6 +417,72 @@ impl XplorerApp {
                     }
                 }
             }
+        }
+    }
+
+    fn execute_undo(&mut self) {
+        if let Some(entry) = self.state.undo_stack.pop() {
+            match entry {
+                state::UndoEntry::Rename { old_path, new_path } => {
+                    let _ = self
+                        .state
+                        .file_op_sender
+                        .send(state::FileOpRequest::Rename { old_path, new_path });
+                }
+                state::UndoEntry::Move {
+                    sources,
+                    original_dirs,
+                } => {
+                    for (src, orig_dir) in sources.iter().zip(original_dirs.iter()) {
+                        let name = std::path::Path::new(src)
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        let dest = std::path::Path::new(orig_dir)
+                            .join(&name)
+                            .to_string_lossy()
+                            .to_string();
+                        let _ = self
+                            .state
+                            .file_op_sender
+                            .send(state::FileOpRequest::Rename {
+                                old_path: src.clone(),
+                                new_path: dest,
+                            });
+                    }
+                }
+                state::UndoEntry::Copy { created } => {
+                    let _ = self
+                        .state
+                        .file_op_sender
+                        .send(state::FileOpRequest::Delete {
+                            id: 0,
+                            paths: created,
+                            to_trash: true,
+                        });
+                }
+                state::UndoEntry::CreateFolder { path } => {
+                    let _ = self
+                        .state
+                        .file_op_sender
+                        .send(state::FileOpRequest::Delete {
+                            id: 0,
+                            paths: vec![path],
+                            to_trash: true,
+                        });
+                }
+                state::UndoEntry::CreateFile { path } => {
+                    let _ = self
+                        .state
+                        .file_op_sender
+                        .send(state::FileOpRequest::Delete {
+                            id: 0,
+                            paths: vec![path],
+                            to_trash: true,
+                        });
+                }
+            }
+            self.state.toasts.info("Undone");
         }
     }
 
@@ -580,6 +652,30 @@ impl XplorerApp {
                     }
                 }
             }
+            PaletteAction::SaveWorkspace => {
+                self.state.save_workspace_dialog = Some(String::new());
+            }
+            PaletteAction::LoadWorkspace(name) => {
+                let store = session::load_workspaces();
+                if let Some(ws) = store.workspaces.iter().find(|w| w.name == name) {
+                    self.state.show_sidebar = ws.show_sidebar;
+                    self.state.show_preview = ws.show_preview;
+                    let tabs: Vec<Tab> = ws
+                        .tabs
+                        .iter()
+                        .filter(|t| std::path::Path::new(&t.path).exists())
+                        .map(|t| {
+                            let tab = self.state.create_tab(&t.path);
+                            self.state.request_load(tab.id, t.path.clone());
+                            tab
+                        })
+                        .collect();
+                    if !tabs.is_empty() {
+                        self.dock_state = DockState::new(tabs);
+                        self.state.update_watcher(&self.dock_state);
+                    }
+                }
+            }
             PaletteAction::NavigateTo(path) => {
                 if let Some(tab) = focused_tab_mut(&mut self.dock_state) {
                     self.state.navigate_tab(tab, &path);
@@ -700,7 +796,11 @@ impl eframe::App for XplorerApp {
 
         ui::progress_panel::show(ctx, &self.state.active_operations);
 
-        if let Some(action) = ui::command_palette::show(ctx, &mut self.state.command_palette) {
+        if let Some(action) = ui::command_palette::show(
+            ctx,
+            &mut self.state.command_palette,
+            &self.state.workspace_names,
+        ) {
             self.handle_palette_action(action);
         }
 
@@ -728,6 +828,62 @@ impl eframe::App for XplorerApp {
                     .state
                     .file_op_sender
                     .send(state::FileOpRequest::Rename { old_path, new_path });
+            }
+        }
+
+        if self.state.save_workspace_dialog.is_some() {
+            let mut close_ws = false;
+            let mut save_ws = false;
+            egui::Window::new("Save Workspace")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label("Enter workspace name:");
+                    if let Some(ref mut name) = self.state.save_workspace_dialog {
+                        let resp = ui.text_edit_singleline(name);
+                        if !resp.has_focus() {
+                            resp.request_focus();
+                        }
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("Cancel").clicked()
+                                || ui.input(|i| i.key_pressed(egui::Key::Escape))
+                            {
+                                close_ws = true;
+                            }
+                            if (ui.button("Save").clicked()
+                                || ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                                && !name.trim().is_empty()
+                            {
+                                save_ws = true;
+                            }
+                        });
+                    }
+                });
+            if save_ws {
+                if let Some(name) = self.state.save_workspace_dialog.take() {
+                    let tabs: Vec<session::TabSession> = all_tab_paths(&self.dock_state)
+                        .into_iter()
+                        .map(|path| session::TabSession { path })
+                        .collect();
+                    session::save_workspace(
+                        name.trim(),
+                        tabs,
+                        self.state.show_sidebar,
+                        self.state.show_preview,
+                    );
+                    self.state.workspace_names = session::load_workspaces()
+                        .workspaces
+                        .iter()
+                        .map(|w| w.name.clone())
+                        .collect();
+                    self.state
+                        .toasts
+                        .success(format!("Workspace '{}' saved", name.trim()));
+                }
+            } else if close_ws {
+                self.state.save_workspace_dialog = None;
             }
         }
 
