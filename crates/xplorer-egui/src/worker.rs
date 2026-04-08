@@ -3,7 +3,9 @@ use std::sync::mpsc;
 
 use eframe::egui;
 
-use crate::state::{DirRequest, DirResponse, FileOpProgress, FileOpRequest, FileOpResponse};
+use crate::state::{
+    DirRequest, DirResponse, FileOpProgress, FileOpRequest, FileOpResponse, UndoEntry,
+};
 
 pub fn spawn_directory_worker(
     receiver: mpsc::Receiver<DirRequest>,
@@ -16,10 +18,12 @@ pub fn spawn_directory_worker(
             match request {
                 DirRequest::LoadDirectory { tab_id, path } => {
                     let result = rt.block_on(xplorer_core::directory::read_directory(&path));
+                    let git_info = xplorer_core::git::get_git_info(&path);
                     let _ = sender.send(DirResponse::DirectoryLoaded {
                         tab_id,
                         path,
                         entries: result.map_err(|e| e.to_string()),
+                        git_info,
                     });
                     ctx.request_repaint();
                 }
@@ -42,41 +46,90 @@ pub fn spawn_file_op_worker(
                     id,
                     sources,
                     dest_dir,
-                } => run_batch_with_progress(
-                    id,
-                    &sources,
-                    |src| {
-                        let name = file_name_of(src);
-                        let dest = Path::new(&dest_dir).join(&name);
-                        let src_path = Path::new(src);
-                        if src_path.is_dir() {
-                            xplorer_core::file_ops::copy_dir(src_path, &dest)
-                        } else {
-                            xplorer_core::file_ops::copy_file(src_path, &dest)
-                        }
-                    },
-                    "Copied",
-                    "Copying",
-                    &progress_sender,
-                    &ctx,
-                ),
+                } => {
+                    let created: Vec<String> = sources
+                        .iter()
+                        .map(|s| {
+                            Path::new(&dest_dir)
+                                .join(file_name_of(s))
+                                .to_string_lossy()
+                                .to_string()
+                        })
+                        .collect();
+                    let resp = run_batch_with_progress(
+                        id,
+                        &sources,
+                        |src| {
+                            let name = file_name_of(src);
+                            let dest = Path::new(&dest_dir).join(&name);
+                            let src_path = Path::new(src);
+                            if src_path.is_dir() {
+                                xplorer_core::file_ops::copy_dir(src_path, &dest)
+                            } else {
+                                xplorer_core::file_ops::copy_file(src_path, &dest)
+                            }
+                        },
+                        "Copied",
+                        "Copying",
+                        &progress_sender,
+                        &ctx,
+                    );
+                    match resp {
+                        FileOpResponse::Success { message, .. } => FileOpResponse::Success {
+                            message,
+                            undo: Some(UndoEntry::Copy { created }),
+                        },
+                        other => other,
+                    }
+                }
                 FileOpRequest::Move {
                     id,
                     sources,
                     dest_dir,
-                } => run_batch_with_progress(
-                    id,
-                    &sources,
-                    |src| {
-                        let name = file_name_of(src);
-                        let dest = Path::new(&dest_dir).join(&name);
-                        xplorer_core::file_ops::move_entry(Path::new(src), &dest)
-                    },
-                    "Moved",
-                    "Moving",
-                    &progress_sender,
-                    &ctx,
-                ),
+                } => {
+                    let original_dirs: Vec<String> = sources
+                        .iter()
+                        .filter_map(|s| {
+                            Path::new(s)
+                                .parent()
+                                .map(|p| p.to_string_lossy().to_string())
+                        })
+                        .collect();
+                    let resp = run_batch_with_progress(
+                        id,
+                        &sources,
+                        |src| {
+                            let name = file_name_of(src);
+                            let dest = Path::new(&dest_dir).join(&name);
+                            xplorer_core::file_ops::move_entry(Path::new(src), &dest)
+                        },
+                        "Moved",
+                        "Moving",
+                        &progress_sender,
+                        &ctx,
+                    );
+                    match resp {
+                        FileOpResponse::Success { message, .. } => FileOpResponse::Success {
+                            message,
+                            undo: Some(UndoEntry::Move {
+                                sources: sources
+                                    .iter()
+                                    .map(|s| file_name_of(s))
+                                    .collect::<Vec<_>>()
+                                    .iter()
+                                    .map(|name| {
+                                        Path::new(&dest_dir)
+                                            .join(name)
+                                            .to_string_lossy()
+                                            .to_string()
+                                    })
+                                    .collect(),
+                                original_dirs,
+                            }),
+                        },
+                        other => other,
+                    }
+                }
                 FileOpRequest::Delete {
                     id,
                     paths,
@@ -104,6 +157,10 @@ pub fn spawn_file_op_worker(
                     {
                         Ok(()) => FileOpResponse::Success {
                             message: format!("Renamed to {}", file_name_of(&new_path)),
+                            undo: Some(UndoEntry::Rename {
+                                old_path: new_path.clone(),
+                                new_path: old_path,
+                            }),
                         },
                         Err(e) => FileOpResponse::Error {
                             message: e.to_string(),
@@ -114,6 +171,7 @@ pub fn spawn_file_op_worker(
                     match rt.block_on(xplorer_core::directory::create_dir_recursive(&path)) {
                         Ok(()) => FileOpResponse::Success {
                             message: format!("Created folder {}", file_name_of(&path)),
+                            undo: Some(UndoEntry::CreateFolder { path }),
                         },
                         Err(e) => FileOpResponse::Error {
                             message: e.to_string(),
@@ -124,6 +182,7 @@ pub fn spawn_file_op_worker(
                     match xplorer_core::file_ops::create_file(Path::new(&path)) {
                         Ok(()) => FileOpResponse::Success {
                             message: format!("Created file {}", file_name_of(&path)),
+                            undo: Some(UndoEntry::CreateFile { path }),
                         },
                         Err(e) => FileOpResponse::Error {
                             message: e.to_string(),
@@ -187,6 +246,7 @@ where
     if errors.is_empty() {
         FileOpResponse::Success {
             message: format!("{} {} item(s)", done_verb, paths.len()),
+            undo: None,
         }
     } else {
         FileOpResponse::Error {
