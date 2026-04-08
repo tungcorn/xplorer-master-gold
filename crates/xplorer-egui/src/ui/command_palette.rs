@@ -67,6 +67,8 @@ pub enum PaletteAction {
     DeletePermanently,
     SelectAll,
     BatchRename,
+    SaveWorkspace,
+    LoadWorkspace(String),
     #[allow(dead_code)]
     NavigateTo(String),
 }
@@ -178,6 +180,11 @@ fn all_commands() -> Vec<PaletteEntry> {
             shortcut: Some("Ctrl+Shift+R".into()),
             action: PaletteAction::BatchRename,
         },
+        PaletteEntry {
+            label: "Save Workspace...".into(),
+            shortcut: None,
+            action: PaletteAction::SaveWorkspace,
+        },
     ]
 }
 
@@ -196,7 +203,11 @@ fn fuzzy_match(query: &str, label: &str) -> bool {
     true
 }
 
-pub fn show(ctx: &egui::Context, palette: &mut CommandPaletteState) -> Option<PaletteAction> {
+pub fn show(
+    ctx: &egui::Context,
+    palette: &mut CommandPaletteState,
+    workspace_names: &[String],
+) -> Option<PaletteAction> {
     if !palette.open {
         return None;
     }
@@ -219,7 +230,14 @@ pub fn show(ctx: &egui::Context, palette: &mut CommandPaletteState) -> Option<Pa
             }
         });
 
-    let commands = all_commands();
+    let mut commands = all_commands();
+    for name in workspace_names {
+        commands.push(PaletteEntry {
+            label: format!("Load Workspace: {}", name),
+            shortcut: None,
+            action: PaletteAction::LoadWorkspace(name.clone()),
+        });
+    }
     let filtered: Vec<&PaletteEntry> = commands
         .iter()
         .filter(|e| fuzzy_match(&palette.query, &e.label))
