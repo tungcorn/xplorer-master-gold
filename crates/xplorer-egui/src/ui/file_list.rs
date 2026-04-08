@@ -3,6 +3,7 @@ use std::path::Path;
 
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
+use xplorer_core::git::GitFileStatus;
 
 use crate::icons;
 use crate::state::{AppState, ClipboardOp, NewItemMode, SortColumn, Tab, ViewMode};
@@ -200,6 +201,16 @@ fn show_details_view(
                                 .selectable(false)
                                 .truncate(),
                             );
+                            if let Some((badge, badge_color)) =
+                                git_badge_for(&entry.path, &tab.git_info)
+                            {
+                                ui.label(
+                                    egui::RichText::new(badge)
+                                        .color(badge_color)
+                                        .size(10.0)
+                                        .strong(),
+                                );
+                            }
                         });
                     }
                 });
@@ -839,4 +850,22 @@ fn open_terminal_at(dir: &str) {
             .args(["/c", "start", "cmd", "/k", &format!("cd /d {}", dir)])
             .spawn();
     }
+}
+
+fn git_badge_for(
+    path: &str,
+    git_info: &Option<xplorer_core::git::GitInfo>,
+) -> Option<(&'static str, egui::Color32)> {
+    let info = git_info.as_ref()?;
+    let status = info.statuses.get(path)?;
+    let (badge, color) = match status {
+        GitFileStatus::Modified => ("M", egui::Color32::from_rgb(0xE0, 0xAF, 0x68)),
+        GitFileStatus::Added => ("A", egui::Color32::from_rgb(0x9E, 0xCE, 0x6A)),
+        GitFileStatus::Deleted => ("D", egui::Color32::from_rgb(0xF7, 0x76, 0x8E)),
+        GitFileStatus::Renamed => ("R", egui::Color32::from_rgb(0x7A, 0xA2, 0xF7)),
+        GitFileStatus::Untracked => ("U", egui::Color32::from_rgb(0x73, 0xDA, 0xCA)),
+        GitFileStatus::Conflicted => ("C", egui::Color32::from_rgb(0xF7, 0x76, 0x8E)),
+        GitFileStatus::Ignored => return None,
+    };
+    Some((badge, color))
 }

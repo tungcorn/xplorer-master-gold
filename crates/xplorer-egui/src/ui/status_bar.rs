@@ -1,9 +1,10 @@
 use eframe::egui;
+use egui_phosphor::regular;
 
 use crate::state::Tab;
 use crate::theme;
 
-pub fn show_for_tab(ui: &mut egui::Ui, tab: &Tab) {
+pub fn show_for_tab(ui: &mut egui::Ui, tab: &Tab, undo_count: usize) {
     ui.separator();
     ui.horizontal(|ui| {
         ui.set_min_height(24.0);
@@ -11,7 +12,7 @@ pub fn show_for_tab(ui: &mut egui::Ui, tab: &Tab) {
         if tab.loading {
             ui.spinner();
             ui.label(
-                egui::RichText::new("Loading…")
+                egui::RichText::new("Loading\u{2026}")
                     .color(theme::SECONDARY)
                     .size(12.0),
             );
@@ -43,7 +44,11 @@ pub fn show_for_tab(ui: &mut egui::Ui, tab: &Tab) {
                     .map(|e| e.size)
                     .sum();
 
-                ui.label(egui::RichText::new("·").color(theme::MUTED).size(12.0));
+                ui.label(
+                    egui::RichText::new("\u{00b7}")
+                        .color(theme::MUTED)
+                        .size(12.0),
+                );
                 ui.label(
                     egui::RichText::new(format!(
                         "{} selected ({})",
@@ -56,7 +61,11 @@ pub fn show_for_tab(ui: &mut egui::Ui, tab: &Tab) {
             }
 
             if tab.show_hidden {
-                ui.label(egui::RichText::new("·").color(theme::MUTED).size(12.0));
+                ui.label(
+                    egui::RichText::new("\u{00b7}")
+                        .color(theme::MUTED)
+                        .size(12.0),
+                );
                 ui.label(
                     egui::RichText::new("Hidden visible")
                         .color(theme::SELECTION)
@@ -74,6 +83,37 @@ pub fn show_for_tab(ui: &mut egui::Ui, tab: &Tab) {
                 )
                 .truncate(),
             );
+
+            if undo_count > 0 {
+                ui.label(
+                    egui::RichText::new("\u{00b7}")
+                        .color(theme::MUTED)
+                        .size(12.0),
+                );
+                ui.label(
+                    egui::RichText::new(format!("{} undoable", undo_count))
+                        .color(theme::SECONDARY)
+                        .size(12.0),
+                );
+            }
+
+            if let Some(ref git) = tab.git_info {
+                ui.label(
+                    egui::RichText::new("\u{00b7}")
+                        .color(theme::MUTED)
+                        .size(12.0),
+                );
+                ui.label(
+                    egui::RichText::new(regular::GIT_BRANCH)
+                        .color(theme::SELECTION)
+                        .size(14.0),
+                );
+                ui.label(
+                    egui::RichText::new(&git.branch)
+                        .color(theme::SELECTION)
+                        .size(12.0),
+                );
+            }
         });
     });
 }

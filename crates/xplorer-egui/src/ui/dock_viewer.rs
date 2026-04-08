@@ -37,7 +37,7 @@ impl<'a> TabViewer for XplorerTabViewer<'a> {
             .resizable(false)
             .show_separator_line(false)
             .show_inside(ui, |ui| {
-                status_bar::show_for_tab(ui, tab);
+                status_bar::show_for_tab(ui, tab, self.state.undo_stack.len());
             });
 
         if self.state.show_preview {
