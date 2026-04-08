@@ -3,6 +3,7 @@ pub mod directory;
 pub mod error;
 pub mod file_ops;
 pub mod file_utils;
+pub mod git;
 pub mod system;
 pub mod trash_ops;
 pub mod types;

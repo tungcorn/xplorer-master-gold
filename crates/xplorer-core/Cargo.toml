@@ -17,6 +17,7 @@ notify = "7"
 notify-debouncer-full = "0.4"
 thiserror = "2"
 open = "5"
+git2 = "0.20"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
