@@ -58,7 +58,7 @@
     "react-pdf": "^10.0.1",
     "react-syntax-highlighter": "^15.6.1",
     "tailwind-merge": "^2.6.0",
-    "wouter": "^3.3.5",
+    "wouter": "^3.9.0",
     "xlsx": "^0.18.5"
   },
   "lint-staged": {
