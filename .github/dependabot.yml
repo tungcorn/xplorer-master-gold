@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: "off"
     open-pull-requests-limit: 10
     labels:
       - dependencies
@@ -13,7 +13,7 @@ updates:
   - package-ecosystem: cargo
     directory: /apps/src-tauri
     schedule:
-      interval: weekly
+      interval: "off"
     open-pull-requests-limit: 5
     labels:
       - dependencies
@@ -22,7 +22,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: "off"
     open-pull-requests-limit: 5
     labels:
       - dependencies
